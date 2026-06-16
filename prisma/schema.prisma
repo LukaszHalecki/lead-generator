@@ -102,6 +102,7 @@ model Company {
   name     String
   industry String?
   city     String?
+  country  String?
   email    String?
   phone    String?
   website  String?
@@ -465,6 +466,9 @@ model ActivityLog {
 }
 
 enum ActivityType {
+  COMPANY_CREATED
+  COMPANY_UPDATED
+  COMPANY_DELETED
   ANALYSIS_COMPLETED
   REPORT_GENERATED
   PRICING_GENERATED

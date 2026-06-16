@@ -1,16 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   getCompanyFn,
   addNoteFn,
   listCampaignsFn,
+  updateCompanyFn,
+  deleteCompanyFn,
 } from '@/server/functions/companies.fn'
 import { PageHeader } from '@/components/layout/app-sidebar'
 import { CompanyStatusBadge } from '@/components/companies/company-status-badge'
 import { LeadPriorityBadge } from '@/components/companies/lead-priority-badge'
 import { LeadScoreIndicator, SalesOpportunityBadge } from '@/components/companies/score-badge'
+import {
+  CompanyFormDialog,
+  companyToFormValues,
+} from '@/components/companies/company-form-dialog'
 import { AnalysisReport } from '@/components/analysis/analysis-report'
 import { ActivityTimeline } from '@/components/crm/activity-timeline'
 import { WorkflowPanel } from '@/components/workflow/workflow-panel'
@@ -18,6 +24,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/input'
 import { formatCurrency } from '@/lib/utils'
+import type { CompanyFormValues } from '@/lib/validators/company.schema'
+import { Pencil, Trash2 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/companies/$companyId')({
   loader: async ({ params }) => {
@@ -31,11 +39,13 @@ export const Route = createFileRoute('/_app/companies/$companyId')({
 })
 
 function CompanyDetailPage() {
+  const navigate = useNavigate()
   const { company: initial, campaigns } = Route.useLoaderData()
   const [company, setCompany] = useState(initial)
   const [note, setNote] = useState('')
+  const [editOpen, setEditOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const latestAnalysis = company.analyses[0]
-  const latestMessage = company.messages[0]
 
   async function refresh() {
     const updated = await getCompanyFn({ data: company.id })
@@ -49,13 +59,48 @@ function CompanyDetailPage() {
     await refresh()
   }
 
+  async function handleUpdate(values: CompanyFormValues) {
+    await updateCompanyFn({ data: { companyId: company.id, values } })
+    await refresh()
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Usunąć firmę „${company.name}”?`)) return
+    setDeleting(true)
+    try {
+      await deleteCompanyFn({ data: company.id })
+      navigate({ to: '/companies' })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Link to="/companies" className="text-sm text-slate-500 hover:text-slate-900">
           ← Powrót do listy
         </Link>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-3 w-3" />
+            Edytuj
+          </Button>
+          <Button variant="destructive" size="sm" disabled={deleting} onClick={handleDelete}>
+            <Trash2 className="h-3 w-3" />
+            Usuń
+          </Button>
+        </div>
       </div>
+
+      <CompanyFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        title="Edytuj firmę"
+        initialValues={companyToFormValues(company)}
+        submitLabel="Zapisz zmiany"
+        onSubmit={handleUpdate}
+      />
 
       <PageHeader title={company.name} description={company.website ?? 'Brak strony WWW'} />
 
@@ -68,11 +113,12 @@ function CompanyDetailPage() {
         )}
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <InfoCard label="Email" value={company.email ?? '—'} />
         <InfoCard label="Telefon" value={company.phone ?? '—'} />
         <InfoCard label="Branża" value={company.industry ?? '—'} />
         <InfoCard label="Miasto" value={company.city ?? '—'} />
+        <InfoCard label="Kraj" value={company.country ?? '—'} />
       </div>
 
       <div className="mb-8">
@@ -95,7 +141,7 @@ function CompanyDetailPage() {
           ) : (
             <Card>
               <CardContent className="p-6 text-sm text-slate-500">
-                Brak analizy — uruchom workflow lub kliknij „Analiza strony”.
+                Brak analizy — uruchom workflow poniżej lub użyj przycisku „Analiza”.
               </CardContent>
             </Card>
           )}
@@ -115,7 +161,7 @@ function CompanyDetailPage() {
                   <p className="font-bold">{formatCurrency(company.latestPricingCompanySite)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Sklep</p>
+                  <p className="text-xs text-slate-500">E-commerce</p>
                   <p className="font-bold">{formatCurrency(company.latestPricingEcommerce ?? 0)}</p>
                 </div>
               </CardContent>

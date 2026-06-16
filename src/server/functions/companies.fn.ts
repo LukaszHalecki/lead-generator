@@ -3,9 +3,20 @@ import { z } from 'zod'
 import { db } from '@/server/db'
 import { getOrgContext } from '@/server/middleware/context'
 import { runCompanyAnalysis } from '@/server/services/analysis/analysis.service'
+import {
+  createCompanyRecord,
+  deleteCompanyRecord,
+  updateCompanyRecord,
+} from '@/server/services/company.service'
 import { importCsvCompanies, fetchOutscraperCompanies } from '@/server/services/import.service'
 import { generateCompanyMessage } from '@/server/services/message-generator.service'
 import { addCompanyToCampaign } from '@/server/integrations/instantly/client'
+import {
+  bulkCampaignSchema,
+  bulkIdsSchema,
+  companyFormSchema,
+  companyUpdateSchema,
+} from '@/lib/validators/company.schema'
 
 const listSchema = z.object({
   status: z.string().optional(),
@@ -40,6 +51,7 @@ export const listCompaniesFn = createServerFn({ method: 'GET' })
         ? {
             OR: [
               { name: { contains: data.search, mode: 'insensitive' as const } },
+              { website: { contains: data.search, mode: 'insensitive' as const } },
               { city: { contains: data.search, mode: 'insensitive' as const } },
               { email: { contains: data.search, mode: 'insensitive' as const } },
             ],
@@ -87,6 +99,116 @@ export const getCompanyFn = createServerFn({ method: 'GET' })
 
     if (!company) throw new Error('Firma nie znaleziona')
     return company
+  })
+
+export const createCompanyFn = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => companyFormSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { organizationId, userId } = await getOrgContext()
+    return createCompanyRecord(organizationId, userId, data)
+  })
+
+export const updateCompanyFn = createServerFn({ method: 'POST' })
+  .validator((data: { companyId: string; values: unknown }) => ({
+    companyId: data.companyId,
+    values: companyUpdateSchema.parse(data.values),
+  }))
+  .handler(async ({ data }) => {
+    const { organizationId, userId } = await getOrgContext()
+    return updateCompanyRecord(organizationId, userId, data.companyId, data.values)
+  })
+
+export const deleteCompanyFn = createServerFn({ method: 'POST' })
+  .validator((companyId: string) => companyId)
+  .handler(async ({ data: companyId }) => {
+    const { organizationId, userId } = await getOrgContext()
+    await deleteCompanyRecord(organizationId, userId, companyId)
+    return { ok: true }
+  })
+
+export const bulkDeleteCompaniesFn = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => bulkIdsSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { organizationId, userId } = await getOrgContext()
+    for (const companyId of data.companyIds) {
+      await deleteCompanyRecord(organizationId, userId, companyId)
+    }
+    return { deleted: data.companyIds.length }
+  })
+
+export const bulkAnalyzeCompaniesFn = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => bulkIdsSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { organizationId, userId } = await getOrgContext()
+    const results: { companyId: string; ok: boolean; error?: string }[] = []
+
+    for (const companyId of data.companyIds) {
+      try {
+        const company = await db.company.findFirst({
+          where: { id: companyId, organizationId },
+        })
+        if (!company?.website) {
+          results.push({ companyId, ok: false, error: 'Brak strony WWW' })
+          continue
+        }
+        await runCompanyAnalysis(companyId, organizationId, userId)
+        results.push({ companyId, ok: true })
+      } catch (e) {
+        results.push({
+          companyId,
+          ok: false,
+          error: e instanceof Error ? e.message : 'Błąd analizy',
+        })
+      }
+    }
+
+    return results
+  })
+
+export const bulkAddToCampaignFn = createServerFn({ method: 'POST' })
+  .validator((data: unknown) => bulkCampaignSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { organizationId, userId } = await getOrgContext()
+    const results: { companyId: string; ok: boolean; error?: string }[] = []
+
+    for (const companyId of data.companyIds) {
+      try {
+        const company = await db.company.findFirst({
+          where: { id: companyId, organizationId },
+          include: { analyses: { take: 1 } },
+        })
+        if (!company?.email) {
+          results.push({ companyId, ok: false, error: 'Brak email' })
+          continue
+        }
+        if (!company.website) {
+          results.push({ companyId, ok: false, error: 'Brak strony WWW' })
+          continue
+        }
+
+        if (company.analyses.length === 0) {
+          await runCompanyAnalysis(companyId, organizationId, userId)
+        }
+
+        const message = await generateCompanyMessage(companyId, organizationId, userId)
+        await addCompanyToCampaign(
+          organizationId,
+          userId,
+          companyId,
+          data.campaignId,
+          message.id,
+        )
+        results.push({ companyId, ok: true })
+      } catch (e) {
+        results.push({
+          companyId,
+          ok: false,
+          error: e instanceof Error ? e.message : 'Błąd kampanii',
+        })
+      }
+    }
+
+    return results
   })
 
 export const analyzeCompanyFn = createServerFn({ method: 'POST' })
