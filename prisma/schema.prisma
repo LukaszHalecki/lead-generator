@@ -22,13 +22,13 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members      OrganizationMember[]
-  companies    Company[]
-  campaigns    Campaign[]
-  importJobs   ImportJob[]
-  credentials  ApiCredential[]
-  activities   ActivityLog[]
-  notes        Note[]
+  members     OrganizationMember[]
+  companies   Company[]
+  campaigns   Campaign[]
+  importJobs  ImportJob[]
+  credentials ApiCredential[]
+  activities  ActivityLog[]
+  notes       Note[]
 
   @@map("organizations")
 }
@@ -70,14 +70,14 @@ enum MemberRole {
 }
 
 model ApiCredential {
-  id             String          @id @default(cuid())
+  id             String      @id @default(cuid())
   organizationId String
   provider       ApiProvider
-  encryptedKey   String          // AES-256 encrypted
+  encryptedKey   String
   label          String?
-  isActive       Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -96,56 +96,65 @@ enum ApiProvider {
 // ─────────────────────────────────────────────
 
 model Company {
-  id             String        @id @default(cuid())
+  id             String @id @default(cuid())
   organizationId String
 
-  // Dane podstawowe (z Outscraper / CSV)
-  name           String
-  industry       String?       // branża
-  city           String?
-  email          String?
-  phone          String?
-  website        String?
+  name     String
+  industry String?
+  city     String?
+  email    String?
+  phone    String?
+  website  String?
 
-  // Normalizacja do deduplikacji
   websiteNormalized String?
   emailNormalized   String?
 
-  status         CompanyStatus @default(NEW)
-
-  // Ostatnia analiza (denormalizacja dla szybkich filtrów)
+  status         CompanyStatus      @default(NEW)
   latestScore    Int?
   latestCategory AnalysisCategory?
+  latestSalesOpportunity SalesOpportunity?
 
-  source         CompanySource @default(MANUAL)
-  externalId     String?       // ID z Outscraper
+  // Denormalizacja wycen (PLN)
+  latestPricingLanding     Int?
+  latestPricingCompanySite Int?
+  latestPricingEcommerce   Int?
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  // Agregaty Instantly (per firma)
+  emailDeliveredCount Int @default(0)
+  emailOpenedCount    Int @default(0)
+  emailClickedCount   Int @default(0)
+  emailRepliedCount   Int @default(0)
 
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  analyses       CompanyAnalysis[]
-  campaignLeads  CampaignLead[]
-  messages       Message[]
-  replies        Reply[]
-  notes          Note[]
-  activities     ActivityLog[]
+  source     CompanySource @default(MANUAL)
+  externalId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  analyses      CompanyAnalysis[]
+  campaignLeads CampaignLead[]
+  messages      Message[]
+  replies       Reply[]
+  notes         Note[]
+  activities    ActivityLog[]
 
   @@unique([organizationId, websiteNormalized])
   @@unique([organizationId, emailNormalized])
   @@index([organizationId, status])
   @@index([organizationId, latestScore])
+  @@index([organizationId, latestSalesOpportunity])
   @@index([organizationId, industry])
   @@map("companies")
 }
 
 enum CompanyStatus {
-  NEW           // Nowy
-  ANALYZED      // Przeanalizowany
-  TO_CONTACT    // Do kontaktu
-  SENT          // Wysłano
-  REPLIED       // Odpowiedział
-  CLIENT        // Klient
+  NEW
+  ANALYZED
+  TO_CONTACT
+  SENT
+  REPLIED
+  CLIENT
 }
 
 enum CompanySource {
@@ -155,11 +164,17 @@ enum CompanySource {
 }
 
 enum AnalysisCategory {
-  CRITICAL      // 0-30   Krytyczna
-  POOR          // 31-50  Słaba
-  AVERAGE       // 51-70  Przeciętna
-  GOOD          // 71-85  Dobra
-  EXCELLENT     // 86-100 Bardzo dobra
+  CRITICAL
+  POOR
+  AVERAGE
+  GOOD
+  EXCELLENT
+}
+
+enum SalesOpportunity {
+  LOW
+  MEDIUM
+  HIGH
 }
 
 // ─────────────────────────────────────────────
@@ -167,35 +182,55 @@ enum AnalysisCategory {
 // ─────────────────────────────────────────────
 
 model CompanyAnalysis {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   companyId String
 
-  // Wynik końcowy
-  score     Int      // 0-100
+  // Lead Score 0-100
+  score     Int
   category  AnalysisCategory
+  scoreBreakdown Json? // { ssl, mobile, responsive, speed, metaTitle, ... }
 
-  // Raport AI
-  aiSummary         String?  @db.Text
-  problems          Json     // string[] — lista problemów
-  recommendations   Json     // string[] — rekomendacje poprawek
+  // Raport AI rozszerzony
+  aiSummary       String? @db.Text
+  problems        Json    // string[]
+  businessImpact  Json    // string[]
+  recommendations Json    // string[]
+  expertSummary   String? @db.Text
 
-  // Oceny AI (sub-scores)
-  aiDesignScore     Int?
-  aiContentScore    Int?
-  aiCtaScore        Int?
+  // AI sub-scores
+  aiDesignScore   Int?
+  aiContentScore  Int?
+  aiCtaScore      Int?
 
-  // Kontrole techniczne
+  // Szansa sprzedażowa AI
+  salesOpportunity       SalesOpportunity?
+  salesOpportunityReason String?           @db.Text
+
+  // Wycena projektu (PLN)
+  pricingLanding     Int?
+  pricingCompanySite Int?
+  pricingEcommerce   Int?
+
+  // Kontrole techniczne Lead Score
   hasSsl            Boolean?
   sslValidUntil     DateTime?
   isMobileFriendly  Boolean?
+  isResponsive      Boolean?
   hasContactForm    Boolean?
   hasGoogleMaps     Boolean?
-  socialMedia       Json?    // { facebook?, instagram?, linkedin?, twitter? }
+  hasGoogleAnalytics Boolean?
+  hasMetaTitle      Boolean?
+  hasMetaDescription Boolean?
+  hasH1             Boolean?
+  metaTitle         String?
+  metaDescription   String?
+  h1Text            String?
+  socialMedia       Json?
   loadTimeMs        Int?
   pageSpeedScore    Int?
 
-  rawTechnicalData  Json?    // pełny dump techniczny
-  rawAiResponse     Json?    // pełna odpowiedź OpenAI
+  rawTechnicalData Json?
+  rawAiResponse    Json?
 
   analyzedAt DateTime @default(now())
   createdAt  DateTime @default(now())
@@ -216,19 +251,18 @@ model ImportJob {
   type           ImportType
   status         ImportStatus @default(PENDING)
 
-  // Parametry (Outscraper search lub nazwa pliku CSV)
-  params         Json?
-  fileName       String?
+  params   Json?
+  fileName String?
 
-  totalRows      Int          @default(0)
-  importedCount  Int          @default(0)
-  duplicateCount Int          @default(0)
-  errorCount     Int          @default(0)
-  errors         Json?        // { row, message }[]
+  totalRows      Int   @default(0)
+  importedCount  Int   @default(0)
+  duplicateCount Int   @default(0)
+  errorCount     Int   @default(0)
+  errors         Json?
 
-  startedAt      DateTime?
-  completedAt    DateTime?
-  createdAt      DateTime     @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -253,33 +287,32 @@ enum ImportStatus {
 // ─────────────────────────────────────────────
 
 model Campaign {
-  id             String         @id @default(cuid())
+  id             String @id @default(cuid())
   organizationId String
 
-  name           String
-  status         CampaignStatus @default(DRAFT)
+  name   String
+  status CampaignStatus @default(DRAFT)
 
-  // Filtry użyte przy tworzeniu
-  scoreThreshold Int?           // wynik poniżej progu
-  requireEmail   Boolean        @default(true)
-  statusFilter   CompanyStatus  @default(TO_CONTACT)
+  scoreThreshold Int?
+  requireEmail   Boolean       @default(true)
+  statusFilter   CompanyStatus @default(TO_CONTACT)
 
-  // Instantly
-  instantlyCampaignId String?   @unique
+  instantlyCampaignId String? @unique
   instantlyStatus     String?
 
-  // Statystyki (sync z Instantly)
-  leadsCount     Int            @default(0)
-  sentCount      Int            @default(0)
-  openCount      Int            @default(0)
-  replyCount     Int            @default(0)
+  leadsCount     Int @default(0)
+  sentCount      Int @default(0)
+  deliveredCount Int @default(0)
+  openCount      Int @default(0)
+  clickCount     Int @default(0)
+  replyCount     Int @default(0)
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  leads          CampaignLead[]
-  messages       Message[]
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads        CampaignLead[]
+  messages     Message[]
 
   @@index([organizationId, status])
   @@map("campaigns")
@@ -293,14 +326,14 @@ enum CampaignStatus {
 }
 
 model CampaignLead {
-  id         String             @id @default(cuid())
+  id         String @id @default(cuid())
   campaignId String
   companyId  String
 
-  status     CampaignLeadStatus @default(PENDING)
+  status          CampaignLeadStatus @default(PENDING)
   instantlyLeadId String?
 
-  addedAt    DateTime           @default(now())
+  addedAt DateTime @default(now())
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -314,6 +347,9 @@ enum CampaignLeadStatus {
   PENDING
   ADDED
   SENT
+  DELIVERED
+  OPENED
+  CLICKED
   REPLIED
   BOUNCED
   FAILED
@@ -324,22 +360,23 @@ enum CampaignLeadStatus {
 // ─────────────────────────────────────────────
 
 model Message {
-  id         String    @id @default(cuid())
+  id         String  @id @default(cuid())
   companyId  String
   campaignId String?
 
-  subject    String
-  body       String    @db.Text
+  subject String
+  body    String @db.Text
 
-  // AI metadata
   generatedByAi Boolean @default(true)
   aiPromptHash  String?
 
-  // Wysyłka
-  sentAt     DateTime?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  openedAt         DateTime?
+  clickedAt        DateTime?
   instantlyEmailId String?
 
-  createdAt  DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
@@ -351,12 +388,12 @@ model Message {
 }
 
 model Reply {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
   messageId String?
 
   subject   String?
-  body      String   @db.Text
+  body      String  @db.Text
   fromEmail String?
 
   instantlyReplyId String? @unique
@@ -374,14 +411,14 @@ model Reply {
 // ─────────────────────────────────────────────
 
 model Note {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   organizationId String
   companyId      String
   authorId       String
 
-  content        String   @db.Text
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -392,17 +429,17 @@ model Note {
 }
 
 model ActivityLog {
-  id             String       @id @default(cuid())
+  id             String  @id @default(cuid())
   organizationId String
   companyId      String?
   userId         String?
 
-  type           ActivityType
-  title          String
-  description    String?      @db.Text
-  metadata       Json?        // kontekst zdarzenia (np. oldStatus, newStatus)
+  type        ActivityType
+  title       String
+  description String?      @db.Text
+  metadata    Json?
 
-  createdAt      DateTime     @default(now())
+  createdAt DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   company      Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -415,35 +452,17 @@ model ActivityLog {
 
 enum ActivityType {
   ANALYSIS_COMPLETED
+  REPORT_GENERATED
+  PRICING_GENERATED
   MESSAGE_SENT
+  MESSAGE_GENERATED
   REPLY_RECEIVED
+  EMAIL_DELIVERED
+  EMAIL_OPENED
+  EMAIL_CLICKED
   NOTE_ADDED
   STATUS_CHANGED
   IMPORT_COMPLETED
   CAMPAIGN_CREATED
   LEAD_ADDED
 }
-
-// ─────────────────────────────────────────────
-// Przyszłe rozszerzenia SaaS (przygotowane, nieaktywne w MVP)
-// ─────────────────────────────────────────────
-
-// model Plan {
-//   id           String @id @default(cuid())
-//   name         String
-//   maxCompanies Int
-//   maxAnalyses  Int
-//   maxEmails    Int
-//   priceMonthly Int    // grosze
-//   subscriptions Subscription[]
-// }
-//
-// model Subscription {
-//   id             String @id @default(cuid())
-//   organizationId String @unique
-//   planId         String
-//   status         SubscriptionStatus
-//   currentPeriodEnd DateTime
-//   organization Organization @relation(...)
-//   plan         Plan @relation(...)
-// }
