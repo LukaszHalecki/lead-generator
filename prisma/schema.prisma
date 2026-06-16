@@ -1,0 +1,449 @@
+// Lead Generator — Schemat bazy danych Prisma
+// Fundament multi-tenant SaaS dla agencji webowych
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Multi-tenancy & Auth
+// ─────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members      OrganizationMember[]
+  companies    Company[]
+  campaigns    Campaign[]
+  importJobs   ImportJob[]
+  credentials  ApiCredential[]
+  activities   ActivityLog[]
+  notes        Note[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships OrganizationMember[]
+  notes       Note[]
+  activities  ActivityLog[]
+
+  @@map("users")
+}
+
+model OrganizationMember {
+  id             String     @id @default(cuid())
+  organizationId String
+  userId         String
+  role           MemberRole @default(MEMBER)
+  createdAt      DateTime   @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model ApiCredential {
+  id             String          @id @default(cuid())
+  organizationId String
+  provider       ApiProvider
+  encryptedKey   String          // AES-256 encrypted
+  label          String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+  @@map("api_credentials")
+}
+
+enum ApiProvider {
+  OUTSCRAPER
+  INSTANTLY
+  OPENAI
+}
+
+// ─────────────────────────────────────────────
+// Companies (Leads)
+// ─────────────────────────────────────────────
+
+model Company {
+  id             String        @id @default(cuid())
+  organizationId String
+
+  // Dane podstawowe (z Outscraper / CSV)
+  name           String
+  industry       String?       // branża
+  city           String?
+  email          String?
+  phone          String?
+  website        String?
+
+  // Normalizacja do deduplikacji
+  websiteNormalized String?
+  emailNormalized   String?
+
+  status         CompanyStatus @default(NEW)
+
+  // Ostatnia analiza (denormalizacja dla szybkich filtrów)
+  latestScore    Int?
+  latestCategory AnalysisCategory?
+
+  source         CompanySource @default(MANUAL)
+  externalId     String?       // ID z Outscraper
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  analyses       CompanyAnalysis[]
+  campaignLeads  CampaignLead[]
+  messages       Message[]
+  replies        Reply[]
+  notes          Note[]
+  activities     ActivityLog[]
+
+  @@unique([organizationId, websiteNormalized])
+  @@unique([organizationId, emailNormalized])
+  @@index([organizationId, status])
+  @@index([organizationId, latestScore])
+  @@index([organizationId, industry])
+  @@map("companies")
+}
+
+enum CompanyStatus {
+  NEW           // Nowy
+  ANALYZED      // Przeanalizowany
+  TO_CONTACT    // Do kontaktu
+  SENT          // Wysłano
+  REPLIED       // Odpowiedział
+  CLIENT        // Klient
+}
+
+enum CompanySource {
+  MANUAL
+  CSV_IMPORT
+  OUTSCRAPER
+}
+
+enum AnalysisCategory {
+  CRITICAL      // 0-30   Krytyczna
+  POOR          // 31-50  Słaba
+  AVERAGE       // 51-70  Przeciętna
+  GOOD          // 71-85  Dobra
+  EXCELLENT     // 86-100 Bardzo dobra
+}
+
+// ─────────────────────────────────────────────
+// Website Analysis
+// ─────────────────────────────────────────────
+
+model CompanyAnalysis {
+  id        String   @id @default(cuid())
+  companyId String
+
+  // Wynik końcowy
+  score     Int      // 0-100
+  category  AnalysisCategory
+
+  // Raport AI
+  aiSummary         String?  @db.Text
+  problems          Json     // string[] — lista problemów
+  recommendations   Json     // string[] — rekomendacje poprawek
+
+  // Oceny AI (sub-scores)
+  aiDesignScore     Int?
+  aiContentScore    Int?
+  aiCtaScore        Int?
+
+  // Kontrole techniczne
+  hasSsl            Boolean?
+  sslValidUntil     DateTime?
+  isMobileFriendly  Boolean?
+  hasContactForm    Boolean?
+  hasGoogleMaps     Boolean?
+  socialMedia       Json?    // { facebook?, instagram?, linkedin?, twitter? }
+  loadTimeMs        Int?
+  pageSpeedScore    Int?
+
+  rawTechnicalData  Json?    // pełny dump techniczny
+  rawAiResponse     Json?    // pełna odpowiedź OpenAI
+
+  analyzedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, analyzedAt])
+  @@map("company_analyses")
+}
+
+// ─────────────────────────────────────────────
+// Import
+// ─────────────────────────────────────────────
+
+model ImportJob {
+  id             String       @id @default(cuid())
+  organizationId String
+  type           ImportType
+  status         ImportStatus @default(PENDING)
+
+  // Parametry (Outscraper search lub nazwa pliku CSV)
+  params         Json?
+  fileName       String?
+
+  totalRows      Int          @default(0)
+  importedCount  Int          @default(0)
+  duplicateCount Int          @default(0)
+  errorCount     Int          @default(0)
+  errors         Json?        // { row, message }[]
+
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("import_jobs")
+}
+
+enum ImportType {
+  CSV
+  OUTSCRAPER
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ─────────────────────────────────────────────
+// Email Campaigns (Instantly)
+// ─────────────────────────────────────────────
+
+model Campaign {
+  id             String         @id @default(cuid())
+  organizationId String
+
+  name           String
+  status         CampaignStatus @default(DRAFT)
+
+  // Filtry użyte przy tworzeniu
+  scoreThreshold Int?           // wynik poniżej progu
+  requireEmail   Boolean        @default(true)
+  statusFilter   CompanyStatus  @default(TO_CONTACT)
+
+  // Instantly
+  instantlyCampaignId String?   @unique
+  instantlyStatus     String?
+
+  // Statystyki (sync z Instantly)
+  leadsCount     Int            @default(0)
+  sentCount      Int            @default(0)
+  openCount      Int            @default(0)
+  replyCount     Int            @default(0)
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads          CampaignLead[]
+  messages       Message[]
+
+  @@index([organizationId, status])
+  @@map("campaigns")
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+model CampaignLead {
+  id         String             @id @default(cuid())
+  campaignId String
+  companyId  String
+
+  status     CampaignLeadStatus @default(PENDING)
+  instantlyLeadId String?
+
+  addedAt    DateTime           @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, companyId])
+  @@index([campaignId, status])
+  @@map("campaign_leads")
+}
+
+enum CampaignLeadStatus {
+  PENDING
+  ADDED
+  SENT
+  REPLIED
+  BOUNCED
+  FAILED
+}
+
+// ─────────────────────────────────────────────
+// Messages & Replies
+// ─────────────────────────────────────────────
+
+model Message {
+  id         String    @id @default(cuid())
+  companyId  String
+  campaignId String?
+
+  subject    String
+  body       String    @db.Text
+
+  // AI metadata
+  generatedByAi Boolean @default(true)
+  aiPromptHash  String?
+
+  // Wysyłka
+  sentAt     DateTime?
+  instantlyEmailId String?
+
+  createdAt  DateTime  @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  replies  Reply[]
+
+  @@index([companyId, sentAt])
+  @@index([campaignId])
+  @@map("messages")
+}
+
+model Reply {
+  id        String   @id @default(cuid())
+  companyId String
+  messageId String?
+
+  subject   String?
+  body      String   @db.Text
+  fromEmail String?
+
+  instantlyReplyId String? @unique
+  receivedAt       DateTime @default(now())
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  message Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, receivedAt])
+  @@map("replies")
+}
+
+// ─────────────────────────────────────────────
+// CRM
+// ─────────────────────────────────────────────
+
+model Note {
+  id             String   @id @default(cuid())
+  organizationId String
+  companyId      String
+  authorId       String
+
+  content        String   @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@map("notes")
+}
+
+model ActivityLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  companyId      String?
+  userId         String?
+
+  type           ActivityType
+  title          String
+  description    String?      @db.Text
+  metadata       Json?        // kontekst zdarzenia (np. oldStatus, newStatus)
+
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([companyId, createdAt])
+  @@map("activity_logs")
+}
+
+enum ActivityType {
+  ANALYSIS_COMPLETED
+  MESSAGE_SENT
+  REPLY_RECEIVED
+  NOTE_ADDED
+  STATUS_CHANGED
+  IMPORT_COMPLETED
+  CAMPAIGN_CREATED
+  LEAD_ADDED
+}
+
+// ─────────────────────────────────────────────
+// Przyszłe rozszerzenia SaaS (przygotowane, nieaktywne w MVP)
+// ─────────────────────────────────────────────
+
+// model Plan {
+//   id           String @id @default(cuid())
+//   name         String
+//   maxCompanies Int
+//   maxAnalyses  Int
+//   maxEmails    Int
+//   priceMonthly Int    // grosze
+//   subscriptions Subscription[]
+// }
+//
+// model Subscription {
+//   id             String @id @default(cuid())
+//   organizationId String @unique
+//   planId         String
+//   status         SubscriptionStatus
+//   currentPeriodEnd DateTime
+//   organization Organization @relation(...)
+//   plan         Plan @relation(...)
+// }
