@@ -8,6 +8,7 @@ export function scoreToCategory(score: number): AnalysisCategory {
 
 export interface ScoreBreakdown {
   ssl: number
+  securityCertificate: number
   mobileFriendly: number
   responsive: number
   speed: number
@@ -18,11 +19,16 @@ export interface ScoreBreakdown {
   googleMaps: number
   socialMedia: number
   googleAnalytics: number
-  aiBonus: number
+  googleTagManager: number
+  favicon: number
+  privacyPolicy: number
+  domainAge: number
+  technologyModern: number
 }
 
 export interface TechnicalCheckInput {
   hasSsl: boolean
+  hasSecurityCertificate: boolean
   isMobileFriendly: boolean
   isResponsive: boolean
   loadTimeMs: number | null
@@ -34,42 +40,53 @@ export interface TechnicalCheckInput {
   hasGoogleMaps: boolean
   hasSocialMedia: boolean
   hasGoogleAnalytics: boolean
-  aiAverageScore?: number
+  hasGoogleTagManager: boolean
+  hasFavicon: boolean
+  hasPrivacyPolicy: boolean
+  domainAgeYears: number | null
+  isTechnologyModern: boolean
+}
+
+function speedPoints(loadTimeMs: number | null, pageSpeedScore: number | null): number {
+  if (pageSpeedScore != null) {
+    return Math.round((pageSpeedScore / 100) * 6)
+  }
+  if (loadTimeMs == null) return 0
+  if (loadTimeMs < 2000) return 6
+  if (loadTimeMs < 4000) return 4
+  if (loadTimeMs < 6000) return 2
+  return 0
+}
+
+function domainAgePoints(years: number | null): number {
+  if (years == null) return 3
+  if (years >= 5) return 6
+  if (years >= 2) return 4
+  return 2
 }
 
 export function calculateLeadScore(checks: TechnicalCheckInput): {
   score: number
   breakdown: ScoreBreakdown
 } {
-  const speedScore = checks.pageSpeedScore
-    ? Math.round((checks.pageSpeedScore / 100) * 12)
-    : checks.loadTimeMs
-      ? checks.loadTimeMs < 2000
-        ? 12
-        : checks.loadTimeMs < 4000
-          ? 8
-          : checks.loadTimeMs < 6000
-            ? 4
-            : 0
-      : 0
-
-  const aiBonus = checks.aiAverageScore
-    ? Math.round((checks.aiAverageScore / 100) * 10)
-    : 0
-
   const breakdown: ScoreBreakdown = {
-    ssl: checks.hasSsl ? 10 : 0,
-    mobileFriendly: checks.isMobileFriendly ? 10 : 0,
-    responsive: checks.isResponsive ? 8 : 0,
-    speed: speedScore,
-    metaTitle: checks.hasMetaTitle ? 8 : 0,
-    metaDescription: checks.hasMetaDescription ? 8 : 0,
+    ssl: checks.hasSsl ? 6 : 0,
+    securityCertificate: checks.hasSecurityCertificate ? 6 : 0,
+    mobileFriendly: checks.isMobileFriendly ? 6 : 0,
+    responsive: checks.isResponsive ? 6 : 0,
+    speed: speedPoints(checks.loadTimeMs, checks.pageSpeedScore),
+    metaTitle: checks.hasMetaTitle ? 6 : 0,
+    metaDescription: checks.hasMetaDescription ? 6 : 0,
     h1: checks.hasH1 ? 6 : 0,
-    contactForm: checks.hasContactForm ? 10 : 0,
+    contactForm: checks.hasContactForm ? 6 : 0,
     googleMaps: checks.hasGoogleMaps ? 6 : 0,
     socialMedia: checks.hasSocialMedia ? 6 : 0,
     googleAnalytics: checks.hasGoogleAnalytics ? 6 : 0,
-    aiBonus,
+    googleTagManager: checks.hasGoogleTagManager ? 6 : 0,
+    favicon: checks.hasFavicon ? 6 : 0,
+    privacyPolicy: checks.hasPrivacyPolicy ? 6 : 0,
+    domainAge: domainAgePoints(checks.domainAgeYears),
+    technologyModern: checks.isTechnologyModern ? 6 : 0,
   }
 
   const score = Math.min(
@@ -80,17 +97,25 @@ export function calculateLeadScore(checks: TechnicalCheckInput): {
   return { score, breakdown }
 }
 
-export function calculatePricing(score: number, hasWebsite: boolean): {
-  landing: number
-  companySite: number
-  ecommerce: number
-} {
-  const baseMultiplier = hasWebsite ? 1 : 1.2
-  const severity = Math.max(0, 100 - score) / 100
-
-  const landing = Math.round((3000 + severity * 4000) * baseMultiplier)
-  const companySite = Math.round((6000 + severity * 9000) * baseMultiplier)
-  const ecommerce = Math.round((12000 + severity * 18000) * baseMultiplier)
-
-  return { landing, companySite, ecommerce }
+export function technicalToCheckInput(technical: {
+  hasSsl: boolean
+  hasSecurityCertificate: boolean
+  isMobileFriendly: boolean
+  isResponsive: boolean
+  loadTimeMs: number | null
+  pageSpeedScore: number | null
+  hasMetaTitle: boolean
+  hasMetaDescription: boolean
+  hasH1: boolean
+  hasContactForm: boolean
+  hasGoogleMaps: boolean
+  hasSocialMedia: boolean
+  hasGoogleAnalytics: boolean
+  hasGoogleTagManager: boolean
+  hasFavicon: boolean
+  hasPrivacyPolicy: boolean
+  domainAgeYears: number | null
+  isTechnologyModern: boolean
+}): TechnicalCheckInput {
+  return technical
 }

@@ -113,6 +113,7 @@ model Company {
   latestScore    Int?
   latestCategory AnalysisCategory?
   latestSalesOpportunity SalesOpportunity?
+  latestLeadPriority     LeadPriority?
 
   // Denormalizacja wycen (PLN)
   latestPricingLanding     Int?
@@ -144,6 +145,7 @@ model Company {
   @@index([organizationId, status])
   @@index([organizationId, latestScore])
   @@index([organizationId, latestSalesOpportunity])
+  @@index([organizationId, latestLeadPriority])
   @@index([organizationId, industry])
   @@map("companies")
 }
@@ -175,6 +177,12 @@ enum SalesOpportunity {
   LOW
   MEDIUM
   HIGH
+}
+
+enum LeadPriority {
+  HOT
+  WARM
+  COLD
 }
 
 // ─────────────────────────────────────────────
@@ -219,6 +227,12 @@ model CompanyAnalysis {
   hasContactForm    Boolean?
   hasGoogleMaps     Boolean?
   hasGoogleAnalytics Boolean?
+  hasGoogleTagManager Boolean?
+  hasFavicon         Boolean?
+  hasPrivacyPolicy   Boolean?
+  hasSecurityCertificate Boolean?
+  domainAgeYears     Int?
+  isTechnologyModern Boolean?
   hasMetaTitle      Boolean?
   hasMetaDescription Boolean?
   hasH1             Boolean?

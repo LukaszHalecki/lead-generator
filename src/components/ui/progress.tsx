@@ -16,13 +16,13 @@ export function Progress({
         style={{
           width: `${value ?? 0}%`,
           backgroundColor:
-            (value ?? 0) <= 30
-              ? '#ef4444'
-              : (value ?? 0) <= 50
-                ? '#f97316'
-                : (value ?? 0) <= 70
-                  ? '#eab308'
-                  : (value ?? 0) <= 85
+            (value ?? 0) <= 20
+              ? '#7f1d1d'
+              : (value ?? 0) <= 40
+                ? '#ef4444'
+                : (value ?? 0) <= 60
+                  ? '#f97316'
+                  : (value ?? 0) <= 80
                     ? '#22c55e'
                     : '#059669',
         }}

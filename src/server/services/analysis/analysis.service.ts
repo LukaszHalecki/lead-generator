@@ -1,9 +1,10 @@
 import { db } from '@/server/db'
+import { calculateLeadPriority } from '@/lib/lead-priority'
 import { analyzeWithAi } from './ai-analyzer'
 import {
   calculateLeadScore,
-  calculatePricing,
   scoreToCategory,
+  technicalToCheckInput,
 } from './score-calculator'
 import { analyzeTechnical } from './technical-analyzer'
 
@@ -20,21 +21,9 @@ export async function runCompanyAnalysis(
   if (!company.website) throw new Error('Firma nie posiada strony WWW')
 
   const technical = await analyzeTechnical(company.website)
+  const checkInput = technicalToCheckInput(technical)
 
-  const preliminaryScore = calculateLeadScore({
-    hasSsl: technical.hasSsl,
-    isMobileFriendly: technical.isMobileFriendly,
-    isResponsive: technical.isResponsive,
-    loadTimeMs: technical.loadTimeMs,
-    pageSpeedScore: technical.pageSpeedScore,
-    hasMetaTitle: technical.hasMetaTitle,
-    hasMetaDescription: technical.hasMetaDescription,
-    hasH1: technical.hasH1,
-    hasContactForm: technical.hasContactForm,
-    hasGoogleMaps: technical.hasGoogleMaps,
-    hasSocialMedia: technical.hasSocialMedia,
-    hasGoogleAnalytics: technical.hasGoogleAnalytics,
-  })
+  const preliminaryScore = calculateLeadScore(checkInput)
 
   const ai = await analyzeWithAi(
     company.name,
@@ -43,28 +32,9 @@ export async function runCompanyAnalysis(
     preliminaryScore.score,
   )
 
-  const aiAverage = Math.round(
-    (ai.aiDesignScore + ai.aiContentScore + ai.aiCtaScore) / 3,
-  )
-
-  const { score, breakdown } = calculateLeadScore({
-    hasSsl: technical.hasSsl,
-    isMobileFriendly: technical.isMobileFriendly,
-    isResponsive: technical.isResponsive,
-    loadTimeMs: technical.loadTimeMs,
-    pageSpeedScore: technical.pageSpeedScore,
-    hasMetaTitle: technical.hasMetaTitle,
-    hasMetaDescription: technical.hasMetaDescription,
-    hasH1: technical.hasH1,
-    hasContactForm: technical.hasContactForm,
-    hasGoogleMaps: technical.hasGoogleMaps,
-    hasSocialMedia: technical.hasSocialMedia,
-    hasGoogleAnalytics: technical.hasGoogleAnalytics,
-    aiAverageScore: aiAverage,
-  })
-
+  const { score, breakdown } = calculateLeadScore(checkInput)
   const category = scoreToCategory(score)
-  const pricing = calculatePricing(score, true)
+  const leadPriority = calculateLeadPriority(score, ai.salesOpportunity)
 
   const analysis = await db.companyAnalysis.create({
     data: {
@@ -82,16 +52,22 @@ export async function runCompanyAnalysis(
       aiCtaScore: ai.aiCtaScore,
       salesOpportunity: ai.salesOpportunity,
       salesOpportunityReason: ai.salesOpportunityReason,
-      pricingLanding: pricing.landing,
-      pricingCompanySite: pricing.companySite,
-      pricingEcommerce: pricing.ecommerce,
+      pricingLanding: ai.pricingLanding,
+      pricingCompanySite: ai.pricingCompanySite,
+      pricingEcommerce: ai.pricingEcommerce,
       hasSsl: technical.hasSsl,
       sslValidUntil: technical.sslValidUntil,
+      hasSecurityCertificate: technical.hasSecurityCertificate,
       isMobileFriendly: technical.isMobileFriendly,
       isResponsive: technical.isResponsive,
       hasContactForm: technical.hasContactForm,
       hasGoogleMaps: technical.hasGoogleMaps,
       hasGoogleAnalytics: technical.hasGoogleAnalytics,
+      hasGoogleTagManager: technical.hasGoogleTagManager,
+      hasFavicon: technical.hasFavicon,
+      hasPrivacyPolicy: technical.hasPrivacyPolicy,
+      domainAgeYears: technical.domainAgeYears,
+      isTechnologyModern: technical.isTechnologyModern,
       hasMetaTitle: technical.hasMetaTitle,
       hasMetaDescription: technical.hasMetaDescription,
       hasH1: technical.hasH1,
@@ -104,12 +80,14 @@ export async function runCompanyAnalysis(
       rawTechnicalData: {
         loadTimeMs: technical.loadTimeMs,
         pageSpeedScore: technical.pageSpeedScore,
+        domainAgeYears: technical.domainAgeYears,
+        isTechnologyModern: technical.isTechnologyModern,
       },
       rawAiResponse: ai.rawResponse,
     },
   })
 
-  const newStatus = score < 70 ? 'TO_CONTACT' : 'ANALYZED'
+  const newStatus = score < 61 ? 'TO_CONTACT' : 'ANALYZED'
 
   await db.company.update({
     where: { id: companyId },
@@ -118,9 +96,10 @@ export async function runCompanyAnalysis(
       latestScore: score,
       latestCategory: category,
       latestSalesOpportunity: ai.salesOpportunity,
-      latestPricingLanding: pricing.landing,
-      latestPricingCompanySite: pricing.companySite,
-      latestPricingEcommerce: pricing.ecommerce,
+      latestLeadPriority: leadPriority,
+      latestPricingLanding: ai.pricingLanding,
+      latestPricingCompanySite: ai.pricingCompanySite,
+      latestPricingEcommerce: ai.pricingEcommerce,
     },
   })
 
@@ -133,7 +112,7 @@ export async function runCompanyAnalysis(
         type: 'ANALYSIS_COMPLETED',
         title: 'Zakończono analizę strony',
         description: `Lead Score: ${score}/100 (${category})`,
-        metadata: { analysisId: analysis.id, score },
+        metadata: { analysisId: analysis.id, score, leadPriority },
       },
       {
         organizationId,
@@ -149,9 +128,13 @@ export async function runCompanyAnalysis(
         companyId,
         userId,
         type: 'PRICING_GENERATED',
-        title: 'Wygenerowano wycenę projektu',
-        description: `Landing: ${pricing.landing} PLN, Strona firmowa: ${pricing.companySite} PLN`,
-        metadata: pricing,
+        title: 'Wygenerowano wycenę AI',
+        description: `Landing: ${ai.pricingLanding} PLN, Strona firmowa: ${ai.pricingCompanySite} PLN, E-commerce: ${ai.pricingEcommerce} PLN`,
+        metadata: {
+          landing: ai.pricingLanding,
+          companySite: ai.pricingCompanySite,
+          ecommerce: ai.pricingEcommerce,
+        },
       },
     ],
   })

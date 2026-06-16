@@ -9,6 +9,7 @@ import {
 } from '@/server/functions/companies.fn'
 import { PageHeader } from '@/components/layout/app-sidebar'
 import { CompanyStatusBadge } from '@/components/companies/company-status-badge'
+import { LeadPriorityBadge } from '@/components/companies/lead-priority-badge'
 import { LeadScoreIndicator, SalesOpportunityBadge } from '@/components/companies/score-badge'
 import { AnalysisReport } from '@/components/analysis/analysis-report'
 import { ActivityTimeline } from '@/components/crm/activity-timeline'
@@ -61,6 +62,7 @@ function CompanyDetailPage() {
       <div className="mb-6 flex flex-wrap gap-3">
         <CompanyStatusBadge status={company.status} />
         <SalesOpportunityBadge opportunity={company.latestSalesOpportunity} />
+        <LeadPriorityBadge priority={company.latestLeadPriority} />
         {company.latestScore !== null && (
           <span className="text-sm font-medium">Lead Score: {company.latestScore}/100</span>
         )}
@@ -80,6 +82,7 @@ function CompanyDetailPage() {
           hasEmail={!!company.email}
           hasAnalysis={company.analyses.length > 0}
           hasMessage={company.messages.length > 0}
+          latestScore={company.latestScore}
           campaigns={campaigns}
           onComplete={refresh}
         />

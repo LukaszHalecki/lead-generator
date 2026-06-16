@@ -2,37 +2,24 @@ import { createServerFn } from '@tanstack/react-start'
 import { db } from '@/server/db'
 import { getOrgContext } from '@/server/middleware/context'
 
-export const getOrgContextFn = createServerFn({ method: 'GET' }).handler(async () => {
-  return getOrgContext()
-})
-
 export const getDashboardStatsFn = createServerFn({ method: 'GET' }).handler(async () => {
   const { organizationId } = await getOrgContext()
 
   const [
     totalCompanies,
-    analyzedCount,
-    toContactCount,
-    sentMessages,
-    repliesCount,
     avgScoreResult,
     below40Count,
     highOpportunityCount,
+    campaignsCount,
+    repliesCount,
     pricingAgg,
-    scoreDistribution,
     statusDistribution,
     analysisTrend,
     emailEngagement,
+    companiesWithScore,
+    allScoredCompanies,
   ] = await Promise.all([
     db.company.count({ where: { organizationId } }),
-    db.company.count({
-      where: { organizationId, status: { not: 'NEW' } },
-    }),
-    db.company.count({ where: { organizationId, status: 'TO_CONTACT' } }),
-    db.message.count({
-      where: { company: { organizationId }, sentAt: { not: null } },
-    }),
-    db.reply.count({ where: { company: { organizationId } } }),
     db.company.aggregate({
       where: { organizationId, latestScore: { not: null } },
       _avg: { latestScore: true },
@@ -41,8 +28,14 @@ export const getDashboardStatsFn = createServerFn({ method: 'GET' }).handler(asy
       where: { organizationId, latestScore: { lt: 40 } },
     }),
     db.company.count({
-      where: { organizationId, latestSalesOpportunity: 'HIGH' },
+      where: {
+        organizationId,
+        latestScore: { lt: 40 },
+        latestSalesOpportunity: 'HIGH',
+      },
     }),
+    db.campaign.count({ where: { organizationId } }),
+    db.reply.count({ where: { company: { organizationId } } }),
     db.company.aggregate({
       where: { organizationId, latestPricingCompanySite: { not: null } },
       _sum: {
@@ -50,11 +43,6 @@ export const getDashboardStatsFn = createServerFn({ method: 'GET' }).handler(asy
         latestPricingCompanySite: true,
         latestPricingEcommerce: true,
       },
-    }),
-    db.company.groupBy({
-      by: ['latestCategory'],
-      where: { organizationId, latestCategory: { not: null } },
-      _count: true,
     }),
     db.company.groupBy({
       by: ['status'],
@@ -76,12 +64,33 @@ export const getDashboardStatsFn = createServerFn({ method: 'GET' }).handler(asy
         emailRepliedCount: true,
       },
     }),
+    db.company.findMany({
+      where: { organizationId, latestScore: { not: null } },
+      select: { latestScore: true },
+    }),
+    db.company.findMany({
+      where: { organizationId, latestScore: { not: null } },
+      select: { latestScore: true, latestSalesOpportunity: true, latestLeadPriority: true },
+    }),
   ])
 
   const potentialValue =
     (pricingAgg._sum.latestPricingLanding ?? 0) +
     (pricingAgg._sum.latestPricingCompanySite ?? 0) +
     (pricingAgg._sum.latestPricingEcommerce ?? 0)
+
+  const hotLeadsCount = allScoredCompanies.filter(
+    (c) => c.latestScore! < 40 && c.latestSalesOpportunity === 'HIGH',
+  ).length
+  const warmLeadsCount = allScoredCompanies.filter(
+    (c) =>
+      c.latestScore! >= 40 &&
+      c.latestScore! <= 60 &&
+      c.latestSalesOpportunity === 'MEDIUM',
+  ).length
+  const coldLeadsCount = allScoredCompanies.filter(
+    (c) => c.latestScore! > 60 && c.latestSalesOpportunity === 'LOW',
+  ).length
 
   const trendMap = new Map<string, { count: number; totalScore: number }>()
   for (const a of analysisTrend) {
@@ -99,44 +108,36 @@ export const getDashboardStatsFn = createServerFn({ method: 'GET' }).handler(asy
   }))
 
   const scoreChartData = [
-    { range: '0-30', count: 0 },
-    { range: '31-50', count: 0 },
-    { range: '51-70', count: 0 },
-    { range: '71-85', count: 0 },
-    { range: '86-100', count: 0 },
+    { range: '0-20', count: 0 },
+    { range: '21-40', count: 0 },
+    { range: '41-60', count: 0 },
+    { range: '61-80', count: 0 },
+    { range: '81-100', count: 0 },
   ]
-
-  const companiesWithScore = await db.company.findMany({
-    where: { organizationId, latestScore: { not: null } },
-    select: { latestScore: true },
-  })
 
   for (const c of companiesWithScore) {
     const s = c.latestScore!
-    if (s <= 30) scoreChartData[0]!.count++
-    else if (s <= 50) scoreChartData[1]!.count++
-    else if (s <= 70) scoreChartData[2]!.count++
-    else if (s <= 85) scoreChartData[3]!.count++
+    if (s <= 20) scoreChartData[0]!.count++
+    else if (s <= 40) scoreChartData[1]!.count++
+    else if (s <= 60) scoreChartData[2]!.count++
+    else if (s <= 80) scoreChartData[3]!.count++
     else scoreChartData[4]!.count++
   }
 
   return {
     totalCompanies,
-    analyzedCount,
-    toContactCount,
-    sentMessages,
-    repliesCount,
     avgLeadScore: Math.round(avgScoreResult._avg.latestScore ?? 0),
     below40Count,
     highOpportunityCount,
     potentialValue,
+    campaignsCount,
+    repliesCount,
+    hotLeadsCount,
+    warmLeadsCount,
+    coldLeadsCount,
     scoreChartData,
     statusChartData: statusDistribution.map((s) => ({
       status: s.status,
-      count: s._count,
-    })),
-    categoryChartData: scoreDistribution.map((s) => ({
-      category: s.latestCategory,
       count: s._count,
     })),
     analysisTrendData,

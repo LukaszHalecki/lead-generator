@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input, Label } from '@/components/ui/input'
+import { Label } from '@/components/ui/input'
 import {
   analyzeCompanyFn,
   generateMessageFn,
@@ -18,6 +18,7 @@ interface WorkflowPanelProps {
   hasEmail: boolean
   hasAnalysis: boolean
   hasMessage: boolean
+  latestScore: number | null
   campaigns: Array<{ id: string; name: string }>
   onComplete: () => void
 }
@@ -28,6 +29,7 @@ export function WorkflowPanel({
   hasEmail,
   hasAnalysis,
   hasMessage,
+  latestScore,
   campaigns,
   onComplete,
 }: WorkflowPanelProps) {
@@ -68,28 +70,35 @@ export function WorkflowPanel({
   const steps = [
     {
       id: 'analyze',
-      label: '1. Analiza strony',
+      label: '1. Analiza',
       disabled: !hasWebsite,
       done: hasAnalysis,
       action: () => runStep('analyze', () => analyzeCompanyFn({ data: companyId })),
     },
     {
+      id: 'score',
+      label: `2. Lead Score${latestScore != null ? ` (${latestScore})` : ''}`,
+      disabled: !hasAnalysis,
+      done: hasAnalysis && latestScore != null,
+      action: null,
+    },
+    {
       id: 'report',
-      label: '2. Raport AI',
+      label: '3. Raport AI',
       disabled: !hasAnalysis,
       done: hasAnalysis,
       action: null,
     },
     {
       id: 'message',
-      label: '3. Generuj wiadomość',
+      label: '4. Wiadomość',
       disabled: !hasAnalysis,
       done: hasMessage,
       action: () => runStep('message', () => generateMessageFn({ data: companyId })),
     },
     {
       id: 'campaign',
-      label: '4. Dodaj do kampanii',
+      label: '5. Kampania Instantly',
       disabled: !hasMessage && !messageId,
       done: false,
       action: () => {
@@ -104,7 +113,9 @@ export function WorkflowPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Workflow: Import → Analiza → Raport → Wiadomość → Kampania</CardTitle>
+        <CardTitle>
+          Workflow: Import → Analiza → Lead Score → Raport → Wiadomość → Kampania
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -113,7 +124,12 @@ export function WorkflowPanel({
               <Button
                 variant={step.done ? 'secondary' : 'default'}
                 size="sm"
-                disabled={step.disabled || !!loading || (step.id === 'report')}
+                disabled={
+                  step.disabled ||
+                  !!loading ||
+                  step.id === 'report' ||
+                  step.id === 'score'
+                }
                 onClick={step.action ?? undefined}
               >
                 {loading === step.id && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -152,7 +168,9 @@ export function WorkflowPanel({
         )}
 
         {!hasEmail && (
-          <p className="text-sm text-amber-600">Firma nie posiada adresu email — wymagany do kampanii.</p>
+          <p className="text-sm text-amber-600">
+            Firma nie posiada adresu email — wymagany do kampanii.
+          </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
       </CardContent>

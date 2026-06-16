@@ -4,11 +4,17 @@ import { ensureHttps } from '@/lib/url'
 export interface TechnicalCheckResult {
   hasSsl: boolean
   sslValidUntil: Date | null
+  hasSecurityCertificate: boolean
   isMobileFriendly: boolean
   isResponsive: boolean
   hasContactForm: boolean
   hasGoogleMaps: boolean
   hasGoogleAnalytics: boolean
+  hasGoogleTagManager: boolean
+  hasFavicon: boolean
+  hasPrivacyPolicy: boolean
+  domainAgeYears: number | null
+  isTechnologyModern: boolean
   hasMetaTitle: boolean
   hasMetaDescription: boolean
   hasH1: boolean
@@ -32,6 +38,34 @@ const SOCIAL_PATTERNS = {
   instagram: /instagram\.com/i,
   linkedin: /linkedin\.com/i,
   twitter: /(twitter\.com|x\.com)/i,
+}
+
+const OUTDATED_TECH_PATTERNS = [
+  /jquery-1\./i,
+  /jquery\.min\.js\?ver=1\./i,
+  /<marquee/i,
+  /<font\b/i,
+  /table[^>]*layout/i,
+  /frontpage/i,
+]
+
+function estimateDomainAgeYears(html: string, bodyText: string): number | null {
+  const currentYear = new Date().getFullYear()
+  const copyrightMatch = bodyText.match(/(?:©|copyright)\s*(\d{4})/i)
+  if (copyrightMatch) {
+    const year = parseInt(copyrightMatch[1]!, 10)
+    if (year > 1990 && year <= currentYear) {
+      return Math.max(0, currentYear - year)
+    }
+  }
+  const builtMatch = html.match(/(?:od\s+)?(\d{4})\s*(?:roku|r\.)/i)
+  if (builtMatch) {
+    const year = parseInt(builtMatch[1]!, 10)
+    if (year > 1990 && year <= currentYear) {
+      return Math.max(0, currentYear - year)
+    }
+  }
+  return null
 }
 
 export async function analyzeTechnical(url: string): Promise<TechnicalCheckResult> {
@@ -91,11 +125,35 @@ export async function analyzeTechnical(url: string): Promise<TechnicalCheckResul
     allLinks.includes('maps.google') ||
     $('iframe[src*="google.com/maps"]').length > 0
 
+  const hasGoogleTagManager =
+    html.includes('googletagmanager.com/gtm.js') ||
+    html.includes('GTM-') ||
+    html.includes('google_tag_manager')
+
   const hasGoogleAnalytics =
-    html.includes('google-analytics.com') ||
-    html.includes('googletagmanager.com') ||
-    html.includes('gtag(') ||
-    html.includes('G-')
+    !hasGoogleTagManager &&
+    (html.includes('google-analytics.com') ||
+      html.includes('gtag(') ||
+      html.includes('G-') ||
+      html.includes('UA-'))
+
+  const hasFavicon =
+    $('link[rel="icon"]').length > 0 ||
+    $('link[rel="shortcut icon"]').length > 0 ||
+    html.includes('favicon.ico')
+
+  const hasPrivacyPolicy =
+    allLinks.toLowerCase().includes('polityka') ||
+    allLinks.toLowerCase().includes('privacy') ||
+    allLinks.toLowerCase().includes('rodo') ||
+    bodyText.includes('polityka prywatności') ||
+    bodyText.includes('privacy policy')
+
+  const hasSecurityCertificate = hasSsl
+
+  const isTechnologyModern = !OUTDATED_TECH_PATTERNS.some((p) => p.test(html))
+
+  const domainAgeYears = estimateDomainAgeYears(html, $('body').text())
 
   const socialMedia: TechnicalCheckResult['socialMedia'] = {}
   for (const [key, pattern] of Object.entries(SOCIAL_PATTERNS)) {
@@ -111,11 +169,17 @@ export async function analyzeTechnical(url: string): Promise<TechnicalCheckResul
   return {
     hasSsl,
     sslValidUntil: hasSsl ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) : null,
+    hasSecurityCertificate,
     isMobileFriendly,
     isResponsive,
     hasContactForm,
     hasGoogleMaps,
-    hasGoogleAnalytics,
+    hasGoogleAnalytics: hasGoogleAnalytics || hasGoogleTagManager,
+    hasGoogleTagManager,
+    hasFavicon,
+    hasPrivacyPolicy,
+    domainAgeYears,
+    isTechnologyModern,
     hasMetaTitle: Boolean(metaTitle && metaTitle.length > 3),
     hasMetaDescription: Boolean(metaDescription && metaDescription.length > 10),
     hasH1: Boolean(h1Text && h1Text.length > 1),

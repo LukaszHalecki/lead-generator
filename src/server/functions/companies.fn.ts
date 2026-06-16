@@ -12,6 +12,7 @@ const listSchema = z.object({
   scoreMin: z.number().optional(),
   scoreMax: z.number().optional(),
   salesOpportunity: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  leadPriority: z.enum(['HOT', 'WARM', 'COLD']).optional(),
   sortBy: z.enum(['name', 'score', 'createdAt', 'status']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
   search: z.string().optional(),
@@ -26,6 +27,7 @@ export const listCompaniesFn = createServerFn({ method: 'GET' })
       organizationId,
       ...(data.status ? { status: data.status as never } : {}),
       ...(data.salesOpportunity ? { latestSalesOpportunity: data.salesOpportunity } : {}),
+      ...(data.leadPriority ? { latestLeadPriority: data.leadPriority } : {}),
       ...(data.scoreMin !== undefined || data.scoreMax !== undefined
         ? {
             latestScore: {

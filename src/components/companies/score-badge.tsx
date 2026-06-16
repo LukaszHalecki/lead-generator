@@ -11,7 +11,7 @@ export function ScoreBadge({ score, category }: { score: number | null; category
   if (score === null) return <Badge variant="outline">Brak</Badge>
 
   const variant =
-    score <= 30 ? 'danger' : score <= 50 ? 'warning' : score <= 70 ? 'secondary' : 'success'
+    score <= 20 ? 'danger' : score <= 40 ? 'danger' : score <= 60 ? 'warning' : 'success'
 
   return (
     <Badge variant={variant}>

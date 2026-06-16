@@ -10,6 +10,7 @@ interface AnalysisReportProps {
 
 const CHECKS = [
   { key: 'hasSsl', label: 'SSL' },
+  { key: 'hasSecurityCertificate', label: 'Certyfikat bezpieczeństwa' },
   { key: 'isMobileFriendly', label: 'Mobile Friendly' },
   { key: 'isResponsive', label: 'Responsywność' },
   { key: 'hasMetaTitle', label: 'Meta Title' },
@@ -18,6 +19,10 @@ const CHECKS = [
   { key: 'hasContactForm', label: 'Formularz kontaktowy' },
   { key: 'hasGoogleMaps', label: 'Google Maps' },
   { key: 'hasGoogleAnalytics', label: 'Google Analytics' },
+  { key: 'hasGoogleTagManager', label: 'Google Tag Manager' },
+  { key: 'hasFavicon', label: 'Favicon' },
+  { key: 'hasPrivacyPolicy', label: 'Polityka prywatności' },
+  { key: 'isTechnologyModern', label: 'Aktualność technologii' },
 ] as const
 
 export function AnalysisReport({ analysis }: AnalysisReportProps) {
@@ -91,6 +96,12 @@ export function AnalysisReport({ analysis }: AnalysisReportProps) {
             )}
             <span>Social Media</span>
           </div>
+          {analysis.domainAgeYears != null && (
+            <div className="flex items-center gap-2 text-sm sm:col-span-2">
+              <Check className="h-4 w-4 text-emerald-600" />
+              <span>Wiek domeny (szac.): {analysis.domainAgeYears} lat</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

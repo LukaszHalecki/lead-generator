@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { getDashboardStatsFn } from '@/server/functions/dashboard.fn'
 import { PageHeader } from '@/components/layout/app-sidebar'
-import { StatsCards } from '@/components/dashboard/stats-cards'
+import { StatsCards, InstantlyStats } from '@/components/dashboard/stats-cards'
 import { DashboardCharts } from '@/components/dashboard/dashboard-charts'
 
 export const Route = createFileRoute('/_app/dashboard/')({
@@ -20,6 +20,7 @@ function DashboardPage() {
       />
       <div className="space-y-8">
         <StatsCards stats={stats} />
+        <InstantlyStats engagement={stats.emailEngagement} />
         <DashboardCharts
           scoreChartData={stats.scoreChartData}
           statusChartData={stats.statusChartData}
