@@ -10,7 +10,7 @@ export function providerLabel(type: EmailProviderType): string {
     ONET: 'Onet (Free Provider)',
     INTERIA: 'Interia (Free Provider)',
     O2: 'O2 (Free Provider)',
-    OTHER_FREE: 'Free Email Provider',
+    OTHER_FREE: 'Inny darmowy provider',
     UNKNOWN: 'Unknown',
   }
   return labels[type]

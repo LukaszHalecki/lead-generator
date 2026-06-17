@@ -25,6 +25,9 @@ export function classifyEmailProvider(email: string, websiteDomain?: string | nu
   const domain = email.split('@')[1]?.toLowerCase()
   if (!domain) return 'UNKNOWN'
 
+  const freeType = FREE_PROVIDER_MAP[domain]
+  if (freeType) return freeType
+
   if (websiteDomain) {
     const normalizedSite = websiteDomain
       .replace(/^https?:\/\//, '')
@@ -36,7 +39,8 @@ export function classifyEmailProvider(email: string, websiteDomain?: string | nu
     }
   }
 
-  return FREE_PROVIDER_MAP[domain] ?? 'OTHER_FREE'
+  // Domena spoza listy darmowych providerów = profesjonalny email firmowy (OVH, home.pl, własna domena)
+  return 'PROFESSIONAL'
 }
 
 export function isFreeProvider(type: EmailProviderType): boolean {
