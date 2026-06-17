@@ -17,6 +17,7 @@ import { Route as AppCampaignsIndexRouteImport } from './routes/_app/campaigns/i
 import { Route as ApiWebhooksInstantlyRouteImport } from './routes/api/webhooks/instantly'
 import { Route as AppCompaniesImportRouteImport } from './routes/_app/companies/import'
 import { Route as AppCompaniesCompanyIdRouteImport } from './routes/_app/companies/$companyId'
+import { Route as ApiScreenshotsCompanyIdVariantRouteImport } from './routes/api/screenshots/$companyId/$variant'
 
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/_app',
@@ -57,6 +58,12 @@ const AppCompaniesCompanyIdRoute = AppCompaniesCompanyIdRouteImport.update({
   path: '/companies/$companyId',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const ApiScreenshotsCompanyIdVariantRoute =
+  ApiScreenshotsCompanyIdVariantRouteImport.update({
+    id: '/api/screenshots/$companyId/$variant',
+    path: '/api/screenshots/$companyId/$variant',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/campaigns/': typeof AppCampaignsIndexRoute
   '/companies/': typeof AppCompaniesIndexRoute
   '/dashboard/': typeof AppDashboardIndexRoute
+  '/api/screenshots/$companyId/$variant': typeof ApiScreenshotsCompanyIdVariantRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,6 +83,7 @@ export interface FileRoutesByTo {
   '/campaigns': typeof AppCampaignsIndexRoute
   '/companies': typeof AppCompaniesIndexRoute
   '/dashboard': typeof AppDashboardIndexRoute
+  '/api/screenshots/$companyId/$variant': typeof ApiScreenshotsCompanyIdVariantRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +95,7 @@ export interface FileRoutesById {
   '/_app/campaigns/': typeof AppCampaignsIndexRoute
   '/_app/companies/': typeof AppCompaniesIndexRoute
   '/_app/dashboard/': typeof AppDashboardIndexRoute
+  '/api/screenshots/$companyId/$variant': typeof ApiScreenshotsCompanyIdVariantRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/campaigns/'
     | '/companies/'
     | '/dashboard/'
+    | '/api/screenshots/$companyId/$variant'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/campaigns'
     | '/companies'
     | '/dashboard'
+    | '/api/screenshots/$companyId/$variant'
   id:
     | '__root__'
     | '/'
@@ -116,12 +128,14 @@ export interface FileRouteTypes {
     | '/_app/campaigns/'
     | '/_app/companies/'
     | '/_app/dashboard/'
+    | '/api/screenshots/$companyId/$variant'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRouteRoute: typeof AppRouteRouteWithChildren
   ApiWebhooksInstantlyRoute: typeof ApiWebhooksInstantlyRoute
+  ApiScreenshotsCompanyIdVariantRoute: typeof ApiScreenshotsCompanyIdVariantRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -182,6 +196,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompaniesCompanyIdRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/api/screenshots/$companyId/$variant': {
+      id: '/api/screenshots/$companyId/$variant'
+      path: '/api/screenshots/$companyId/$variant'
+      fullPath: '/api/screenshots/$companyId/$variant'
+      preLoaderRoute: typeof ApiScreenshotsCompanyIdVariantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -209,6 +230,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
   ApiWebhooksInstantlyRoute: ApiWebhooksInstantlyRoute,
+  ApiScreenshotsCompanyIdVariantRoute: ApiScreenshotsCompanyIdVariantRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

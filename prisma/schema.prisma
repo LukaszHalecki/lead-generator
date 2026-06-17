@@ -220,6 +220,10 @@ model CompanyAnalysis {
   pricingCompanySite Int?
   pricingEcommerce   Int?
 
+  // Zrzuty ekranu (desktop + mobile)
+  screenshotDesktopPath String?
+  screenshotMobilePath  String?
+
   // Kontrole techniczne Lead Score
   hasSsl            Boolean?
   sslValidUntil     DateTime?

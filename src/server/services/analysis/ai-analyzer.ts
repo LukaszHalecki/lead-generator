@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import type { SalesOpportunity } from '@prisma/client'
 import type { TechnicalCheckResult } from './technical-analyzer'
+import type { ScreenshotResult } from './screenshot-capture'
 
 export interface AiAnalysisResult {
   aiDesignScore: number
@@ -55,9 +56,11 @@ function buildPrompt(
   url: string,
   technical: TechnicalCheckResult,
   leadScore: number,
+  hasScreenshots: boolean,
 ): string {
   return `Jesteś ekspertem od stron internetowych i sprzedaży usług webowych dla agencji Pixel-app.
 Przeanalizuj stronę firmy "${companyName}" (${url}).
+${hasScreenshots ? '\nDo wiadomości dołączono zrzuty ekranu strony (desktop i mobile) — oceń wygląd wizualny na ich podstawie.\n' : ''}
 
 Wynik Lead Score: ${leadScore}/100
 
@@ -118,9 +121,11 @@ export async function analyzeWithAi(
   technical: TechnicalCheckResult,
   leadScore: number,
   apiKey?: string,
+  screenshots?: ScreenshotResult,
 ): Promise<AiAnalysisResult> {
   const key = apiKey ?? process.env.OPENAI_API_KEY
   const pricingFallback = fallbackPricing(leadScore)
+  const hasScreenshots = Boolean(screenshots?.desktopBase64 || screenshots?.mobileBase64)
 
   if (!key) {
     return {
@@ -136,9 +141,39 @@ export async function analyzeWithAi(
 
   try {
     const client = new OpenAI({ apiKey: key })
+    const prompt = buildPrompt(companyName, url, technical, leadScore, hasScreenshots)
+
+    const imageParts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+    if (screenshots?.desktopBase64) {
+      imageParts.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:image/png;base64,${screenshots.desktopBase64}`,
+          detail: 'low',
+        },
+      })
+    }
+    if (screenshots?.mobileBase64) {
+      imageParts.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:image/png;base64,${screenshots.mobileBase64}`,
+          detail: 'low',
+        },
+      })
+    }
+
     const response = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: buildPrompt(companyName, url, technical, leadScore) }],
+      model: hasScreenshots ? 'gpt-4o' : 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'user',
+          content:
+            imageParts.length > 0
+              ? [{ type: 'text', text: prompt }, ...imageParts]
+              : prompt,
+        },
+      ],
       response_format: { type: 'json_object' },
       temperature: 0.4,
     })

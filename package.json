@@ -39,6 +39,7 @@
     "lucide-react": "^0.545.0",
     "openai": "^6.3.0",
     "papaparse": "^5.5.3",
+    "playwright": "^1.55.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.2.1",
@@ -67,7 +68,8 @@
       "lightningcss",
       "@prisma/client",
       "@prisma/engines",
-      "prisma"
+      "prisma",
+      "playwright"
     ]
   }
 }

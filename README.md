@@ -34,6 +34,7 @@ docker compose up -d
 cp .env.example .env
 pnpm db:migrate
 pnpm db:seed
+pnpm exec playwright install chromium
 pnpm dev
 ```
 

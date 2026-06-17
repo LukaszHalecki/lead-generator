@@ -70,6 +70,22 @@ export function AnalysisReport({ analysis }: AnalysisReportProps) {
         </CardContent>
       </Card>
 
+      {(analysis.screenshotDesktopPath || analysis.screenshotMobilePath) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Zrzuty ekranu strony</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-2">
+            {analysis.screenshotDesktopPath && (
+              <ScreenshotPreview label="Desktop (1280px)" src={analysis.screenshotDesktopPath} />
+            )}
+            {analysis.screenshotMobilePath && (
+              <ScreenshotPreview label="Mobile (375px)" src={analysis.screenshotMobilePath} />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Kontrole techniczne</CardTitle>
@@ -144,5 +160,20 @@ function ReportSection({ title, items }: { title: string; items: string[] }) {
         </ul>
       </CardContent>
     </Card>
+  )
+}
+
+function ScreenshotPreview({ label, src }: { label: string; src: string }) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-slate-600">{label}</p>
+      <a href={src} target="_blank" rel="noopener noreferrer">
+        <img
+          src={src}
+          alt={label}
+          className="w-full rounded-lg border border-slate-200 shadow-sm transition hover:opacity-90"
+        />
+      </a>
+    </div>
   )
 }

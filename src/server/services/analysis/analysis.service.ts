@@ -6,6 +6,7 @@ import {
   scoreToCategory,
   technicalToCheckInput,
 } from './score-calculator'
+import { captureWebsiteScreenshots } from './screenshot-capture'
 import { analyzeTechnical } from './technical-analyzer'
 
 export async function runCompanyAnalysis(
@@ -23,6 +24,8 @@ export async function runCompanyAnalysis(
   const technical = await analyzeTechnical(company.website)
   const checkInput = technicalToCheckInput(technical)
 
+  const screenshots = await captureWebsiteScreenshots(company.website, companyId)
+
   const preliminaryScore = calculateLeadScore(checkInput)
 
   const ai = await analyzeWithAi(
@@ -30,6 +33,8 @@ export async function runCompanyAnalysis(
     company.website,
     technical,
     preliminaryScore.score,
+    undefined,
+    screenshots,
   )
 
   const { score, breakdown } = calculateLeadScore(checkInput)
@@ -55,6 +60,8 @@ export async function runCompanyAnalysis(
       pricingLanding: ai.pricingLanding,
       pricingCompanySite: ai.pricingCompanySite,
       pricingEcommerce: ai.pricingEcommerce,
+      screenshotDesktopPath: screenshots.screenshotDesktopPath,
+      screenshotMobilePath: screenshots.screenshotMobilePath,
       hasSsl: technical.hasSsl,
       sslValidUntil: technical.sslValidUntil,
       hasSecurityCertificate: technical.hasSecurityCertificate,
@@ -82,6 +89,7 @@ export async function runCompanyAnalysis(
         pageSpeedScore: technical.pageSpeedScore,
         domainAgeYears: technical.domainAgeYears,
         isTechnologyModern: technical.isTechnologyModern,
+        hasScreenshots: Boolean(screenshots.screenshotDesktopPath),
       },
       rawAiResponse: ai.rawResponse,
     },
