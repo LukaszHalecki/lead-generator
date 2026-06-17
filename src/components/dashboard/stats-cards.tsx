@@ -5,8 +5,16 @@ interface StatsCardsProps {
   stats: {
     totalCompanies: number
     avgLeadScore: number
+    avgWebsiteScore: number
+    avgEmailScore: number
+    avgMarketingScore: number
     below40Count: number
     highOpportunityCount: number
+    highAuditOpportunityCount: number
+    missingSpfCount: number
+    missingDkimCount: number
+    missingDmarcCount: number
+    freeEmailCount: number
     potentialValue: number
     campaignsCount: number
     repliesCount: number
@@ -25,12 +33,17 @@ interface StatsCardsProps {
 export function StatsCards({ stats }: StatsCardsProps) {
   const cards = [
     { title: 'Liczba firm', value: stats.totalCompanies },
+    { title: 'Średni Website Score', value: `${stats.avgWebsiteScore}/100` },
+    { title: 'Średni Email Score', value: `${stats.avgEmailScore}/100` },
+    { title: 'Średni Marketing Score', value: `${stats.avgMarketingScore}/100` },
     { title: 'Średni Lead Score', value: `${stats.avgLeadScore}/100` },
     { title: 'Firmy poniżej 40 pkt', value: stats.below40Count },
-    { title: 'Wysoka szansa sprzedaży', value: stats.highOpportunityCount },
-    { title: 'Potencjalna wartość projektów', value: formatCurrency(stats.potentialValue) },
-    { title: 'Liczba kampanii', value: stats.campaignsCount },
-    { title: 'Liczba odpowiedzi', value: stats.repliesCount },
+    { title: 'HIGH Opportunity', value: stats.highAuditOpportunityCount },
+    { title: 'Brak SPF', value: stats.missingSpfCount },
+    { title: 'Brak DKIM', value: stats.missingDkimCount },
+    { title: 'Brak DMARC', value: stats.missingDmarcCount },
+    { title: 'Free email (Gmail/WP/Onet)', value: stats.freeEmailCount },
+    { title: 'Potencjalna wartość', value: formatCurrency(stats.potentialValue) },
     { title: 'Hot Leads', value: stats.hotLeadsCount },
     { title: 'Warm Leads', value: stats.warmLeadsCount },
     { title: 'Cold Leads', value: stats.coldLeadsCount },

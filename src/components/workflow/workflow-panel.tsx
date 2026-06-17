@@ -16,9 +16,13 @@ interface WorkflowPanelProps {
   companyId: string
   hasWebsite: boolean
   hasEmail: boolean
+  hasAudit: boolean
   hasAnalysis: boolean
   hasMessage: boolean
   latestScore: number | null
+  latestWebsiteScore: number | null
+  latestEmailScore: number | null
+  latestMarketingScore: number | null
   campaigns: Array<{ id: string; name: string }>
   onComplete: () => void
 }
@@ -27,9 +31,13 @@ export function WorkflowPanel({
   companyId,
   hasWebsite,
   hasEmail,
+  hasAudit,
   hasAnalysis,
   hasMessage,
   latestScore,
+  latestWebsiteScore,
+  latestEmailScore,
+  latestMarketingScore,
   campaigns,
   onComplete,
 }: WorkflowPanelProps) {
@@ -69,36 +77,57 @@ export function WorkflowPanel({
 
   const steps = [
     {
-      id: 'analyze',
-      label: '1. Analiza',
+      id: 'audit',
+      label: '1. Website Audit',
       disabled: !hasWebsite,
-      done: hasAnalysis,
-      action: () => runStep('analyze', () => analyzeCompanyFn({ data: companyId })),
+      done: hasAudit,
+      action: () => runStep('audit', () => analyzeCompanyFn({ data: companyId })),
+    },
+    {
+      id: 'email',
+      label: `2. Email Audit${latestEmailScore != null ? ` (${latestEmailScore})` : ''}`,
+      disabled: !hasAudit,
+      done: hasAudit && latestEmailScore != null,
+      action: null,
+    },
+    {
+      id: 'marketing',
+      label: `3. Marketing Audit${latestMarketingScore != null ? ` (${latestMarketingScore})` : ''}`,
+      disabled: !hasAudit,
+      done: hasAudit && latestMarketingScore != null,
+      action: null,
+    },
+    {
+      id: 'report',
+      label: '4. AI Report',
+      disabled: !hasAudit,
+      done: hasAudit,
+      action: null,
     },
     {
       id: 'score',
-      label: `2. Lead Score${latestScore != null ? ` (${latestScore})` : ''}`,
+      label: `5. Lead Score${latestScore != null ? ` (${latestScore})` : ''}`,
       disabled: !hasAnalysis,
       done: hasAnalysis && latestScore != null,
       action: null,
     },
     {
-      id: 'report',
-      label: '3. Raport AI',
-      disabled: !hasAnalysis,
-      done: hasAnalysis,
+      id: 'opportunity',
+      label: `6. Sales Opportunity${latestWebsiteScore != null ? '' : ''}`,
+      disabled: !hasAudit,
+      done: hasAudit,
       action: null,
     },
     {
       id: 'message',
-      label: '4. Wiadomość',
-      disabled: !hasAnalysis,
+      label: '7. Wiadomość',
+      disabled: !hasAudit,
       done: hasMessage,
       action: () => runStep('message', () => generateMessageFn({ data: companyId })),
     },
     {
       id: 'campaign',
-      label: '5. Kampania Instantly',
+      label: '8. Kampania',
       disabled: !hasMessage && !messageId,
       done: false,
       action: () => {
@@ -114,7 +143,7 @@ export function WorkflowPanel({
     <Card>
       <CardHeader>
         <CardTitle>
-          Workflow: Import → Analiza → Lead Score → Raport → Wiadomość → Kampania
+          Workflow: Import → Website Audit → Email Audit → Marketing Audit → AI Report → Lead Score → Sales Opportunity → Email → Campaign
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -127,8 +156,7 @@ export function WorkflowPanel({
                 disabled={
                   step.disabled ||
                   !!loading ||
-                  step.id === 'report' ||
-                  step.id === 'score'
+                  !step.action
                 }
                 onClick={step.action ?? undefined}
               >
@@ -151,16 +179,11 @@ export function WorkflowPanel({
                 onChange={(e) => setCampaignId(e.target.value)}
               >
                 {campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
-            <Button
-              onClick={runFullWorkflow}
-              disabled={!hasWebsite || !hasEmail || !!loading}
-            >
+            <Button onClick={runFullWorkflow} disabled={!hasWebsite || !!loading}>
               {loading === 'full' && <Loader2 className="h-4 w-4 animate-spin" />}
               Uruchom cały workflow
             </Button>
@@ -169,7 +192,7 @@ export function WorkflowPanel({
 
         {!hasEmail && (
           <p className="text-sm text-amber-600">
-            Firma nie posiada adresu email — wymagany do kampanii.
+            Brak email w profilu firmy — audyt spróbuje wykryć adresy ze strony. Email wymagany do kampanii.
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}

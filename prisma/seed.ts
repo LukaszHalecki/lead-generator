@@ -3,38 +3,77 @@ import bcrypt from 'bcryptjs'
 
 const db = new PrismaClient()
 
+const AUDIT_SAMPLES = [
+  {
+    websiteScore: 28,
+    emailScore: 35,
+    marketingScore: 22,
+    hasSpf: false,
+    hasDkim: false,
+    hasDmarc: false,
+    usesFreeEmail: false,
+    emails: [
+      { address: 'kontakt@poddebem.pl', source: 'homepage:footer', classification: 'PROFESSIONAL' as const },
+      { address: 'biuro@poddebem.pl', source: 'contact:mailto', classification: 'PROFESSIONAL' as const },
+    ],
+  },
+  {
+    websiteScore: 52,
+    emailScore: 55,
+    marketingScore: 48,
+    hasSpf: true,
+    hasDkim: false,
+    hasDmarc: false,
+    usesFreeEmail: false,
+    emails: [
+      { address: 'biuro@autoserwis-max.pl', source: 'homepage', classification: 'PROFESSIONAL' as const },
+    ],
+  },
+  {
+    websiteScore: 82,
+    emailScore: 78,
+    marketingScore: 75,
+    hasSpf: true,
+    hasDkim: true,
+    hasDmarc: true,
+    usesFreeEmail: false,
+    emails: [
+      { address: 'info@kancelaria-nowak.pl', source: 'homepage:mailto', classification: 'PROFESSIONAL' as const },
+    ],
+  },
+  {
+    websiteScore: 22,
+    emailScore: 18,
+    marketingScore: 15,
+    hasSpf: false,
+    hasDkim: false,
+    hasDmarc: false,
+    usesFreeEmail: true,
+    emails: [
+      { address: 'kontakt@gmail.com', source: 'homepage:footer', classification: 'GMAIL' as const },
+    ],
+  },
+]
+
 async function main() {
   const passwordHash = await bcrypt.hash('demo1234', 10)
 
   const org = await db.organization.upsert({
     where: { slug: 'pixel-app' },
     update: {},
-    create: {
-      name: 'Pixel-app',
-      slug: 'pixel-app',
-    },
+    create: { name: 'Pixel-app', slug: 'pixel-app' },
   })
 
   const user = await db.user.upsert({
     where: { email: 'demo@pixel-app.pl' },
     update: {},
-    create: {
-      email: 'demo@pixel-app.pl',
-      name: 'Demo User',
-      passwordHash,
-    },
+    create: { email: 'demo@pixel-app.pl', name: 'Demo User', passwordHash },
   })
 
   await db.organizationMember.upsert({
-    where: {
-      organizationId_userId: { organizationId: org.id, userId: user.id },
-    },
+    where: { organizationId_userId: { organizationId: org.id, userId: user.id } },
     update: {},
-    create: {
-      organizationId: org.id,
-      userId: user.id,
-      role: 'OWNER',
-    },
+    create: { organizationId: org.id, userId: user.id, role: 'OWNER' },
   })
 
   const campaign = await db.campaign.upsert({
@@ -94,22 +133,47 @@ async function main() {
       latestLeadPriority: 'COLD' as const,
       status: 'NEW' as const,
     },
+    {
+      name: 'Sklep Meblowy Drewno',
+      industry: 'Meble',
+      city: 'Poznań',
+      email: 'kontakt@gmail.com',
+      website: 'https://example.edu',
+      latestScore: 25,
+      latestCategory: 'CRITICAL' as const,
+      latestSalesOpportunity: 'HIGH' as const,
+      latestLeadPriority: 'HOT' as const,
+      status: 'TO_CONTACT' as const,
+      latestPricingLanding: 5000,
+      latestPricingCompanySite: 9500,
+      latestPricingEcommerce: 22000,
+    },
   ]
 
-  for (const c of sampleCompanies) {
+  for (let i = 0; i < sampleCompanies.length; i++) {
+    const c = sampleCompanies[i]!
+    const audit = AUDIT_SAMPLES[i] ?? AUDIT_SAMPLES[0]!
     const websiteNormalized = c.website
       ?.replace(/^https?:\/\//, '')
       .replace(/^www\./, '')
       .toLowerCase()
 
-    await db.company.upsert({
+    const company = await db.company.upsert({
       where: {
         organizationId_websiteNormalized: {
           organizationId: org.id,
           websiteNormalized: websiteNormalized ?? `no-website-${c.name}`,
         },
       },
-      update: {},
+      update: {
+        latestWebsiteScore: audit.websiteScore,
+        latestEmailScore: audit.emailScore,
+        latestMarketingScore: audit.marketingScore,
+        hasSpf: audit.hasSpf,
+        hasDkim: audit.hasDkim,
+        hasDmarc: audit.hasDmarc,
+        usesFreeEmail: audit.usesFreeEmail ?? c.email?.includes('gmail.com') ?? false,
+      },
       create: {
         organizationId: org.id,
         name: c.name,
@@ -127,50 +191,117 @@ async function main() {
         latestPricingLanding: c.latestPricingLanding,
         latestPricingCompanySite: c.latestPricingCompanySite,
         latestPricingEcommerce: c.latestPricingEcommerce,
+        latestWebsiteScore: audit.websiteScore,
+        latestEmailScore: audit.emailScore,
+        latestMarketingScore: audit.marketingScore,
+        hasSpf: audit.hasSpf,
+        hasDkim: audit.hasDkim,
+        hasDmarc: audit.hasDmarc,
+        usesFreeEmail: c.email?.includes('gmail.com') ?? false,
         status: c.status,
         source: 'MANUAL',
-        analyses: c.latestScore
-          ? {
-              create: {
-                score: c.latestScore,
-                category: c.latestCategory!,
-                problems: [
-                  'Brak responsywnego designu',
-                  'Słabe meta tagi SEO',
-                  'Brak wyraźnych CTA',
-                ],
-                businessImpact: [
-                  'Utrata klientów mobilnych',
-                  'Niska konwersja z wyszukiwarek',
-                  'Słaba widoczność online',
-                ],
-                recommendations: [
-                  'Modernizacja układu strony',
-                  'Optymalizacja SEO',
-                  'Dodanie formularza kontaktowego',
-                ],
-                expertSummary:
-                  'Strona wymaga odświeżenia — widoczne braki techniczne i UX sugerują potencjał na projekt.',
-                salesOpportunity: c.latestSalesOpportunity,
-                salesOpportunityReason:
-                  'Firma posiada aktywną obecność online z przestarzałą stroną — dobry moment na ofertę modernizacji.',
-                pricingLanding: c.latestPricingLanding,
-                pricingCompanySite: c.latestPricingCompanySite,
-                pricingEcommerce: c.latestPricingEcommerce,
-                hasSsl: c.latestScore > 50,
-                isMobileFriendly: c.latestScore > 60,
-                isResponsive: c.latestScore > 55,
-                hasContactForm: c.latestScore > 40,
-                hasGoogleMaps: true,
-                hasGoogleAnalytics: c.latestScore > 45,
-                hasMetaTitle: c.latestScore > 50,
-                hasMetaDescription: c.latestScore > 45,
-                hasH1: true,
-              },
-            }
-          : undefined,
       },
     })
+
+    const existingAudit = await db.companyAudit.findFirst({
+      where: { companyId: company.id },
+    })
+
+    if (!existingAudit && c.latestScore) {
+      await db.companyAudit.create({
+        data: {
+          companyId: company.id,
+          websiteScore: audit.websiteScore,
+          emailScore: audit.emailScore,
+          marketingScore: audit.marketingScore,
+          leadScore: c.latestScore,
+          category: c.latestCategory!,
+          overallOpportunity: c.latestSalesOpportunity!,
+          opportunityReason: `Website Score ${audit.websiteScore}/100, Email Score ${audit.emailScore}/100, Marketing Score ${audit.marketingScore}/100.`,
+          hasSsl: audit.websiteScore > 50,
+          isMobileFriendly: audit.websiteScore > 55,
+          isResponsive: audit.websiteScore > 50,
+          hasMetaTitle: true,
+          hasMetaDescription: audit.websiteScore > 40,
+          hasH1: true,
+          hasContactForm: audit.websiteScore > 35,
+          hasGoogleMaps: audit.marketingScore > 30,
+          hasPrivacyPolicy: audit.websiteScore > 60,
+          problems: ['Brak responsywnego designu', 'Słabe meta tagi SEO'],
+          businessImpact: ['Utrata leadów', 'Obniżone zaufanie klientów'],
+          recommendations: ['Modernizacja UX', 'Konfiguracja SPF/DKIM/DMARC'],
+          expertSummary: 'Firma wymaga poprawy obecności online — dobry kandydat na usługi agencji.',
+          pricingLanding: c.latestPricingLanding,
+          pricingCompanySite: c.latestPricingCompanySite,
+          pricingEcommerce: c.latestPricingEcommerce,
+          websiteFindings: ['✗ Brak SSL', '✗ Brak analytics'],
+          emailAudit: {
+            create: {
+              emailScore: audit.emailScore,
+              hasMx: true,
+              hasSpf: audit.hasSpf,
+              hasDkim: audit.hasDkim,
+              hasDmarc: audit.hasDmarc,
+              usesBusinessDomain: !c.email?.includes('gmail.com'),
+              usesFreeEmailOnly: c.email?.includes('gmail.com') ?? false,
+              findings: audit.hasSpf ? ['✓ SPF configured'] : ['✗ Missing SPF'],
+              emailRecords: {
+                create: (audit.emails ?? []).map((e) => ({
+                  address: e.address,
+                  source: e.source,
+                  classification: e.classification,
+                })),
+              },
+              dnsRecords: {
+                create: [
+                  { domain: 'example.com', recordType: 'MX', value: '10 mail.example.com', isValid: true },
+                  { domain: 'example.com', recordType: 'SPF', value: audit.hasSpf ? 'v=spf1 include:_spf.google.com ~all' : null, isValid: audit.hasSpf },
+                  { domain: 'example.com', recordType: 'DKIM', value: audit.hasDkim ? 'v=DKIM1; p=...' : null, isValid: audit.hasDkim },
+                  { domain: 'example.com', recordType: 'DMARC', value: audit.hasDmarc ? 'v=DMARC1; p=reject' : null, isValid: audit.hasDmarc },
+                ],
+              },
+            },
+          },
+          marketingAudit: {
+            create: {
+              marketingScore: audit.marketingScore,
+              hasGoogleAnalytics: audit.marketingScore > 40,
+              hasGa4: audit.marketingScore > 50,
+              hasGoogleTagManager: audit.marketingScore > 45,
+              hasMetaPixel: false,
+              hasLinkedInInsight: false,
+              socialLinks: audit.marketingScore > 40 ? { facebook: 'https://facebook.com/example' } : {},
+              hasGoogleMaps: audit.marketingScore > 30,
+              hasAddress: true,
+              hasPhone: true,
+              findings: audit.marketingScore > 50 ? ['✓ Analytics detected'] : ['✗ No analytics tracking'],
+            },
+          },
+        },
+      })
+
+      await db.companyAnalysis.create({
+        data: {
+          companyId: company.id,
+          score: c.latestScore,
+          category: c.latestCategory!,
+          problems: ['Brak responsywnego designu'],
+          businessImpact: ['Utrata klientów mobilnych'],
+          recommendations: ['Modernizacja układu strony'],
+          expertSummary: 'Strona wymaga odświeżenia.',
+          salesOpportunity: c.latestSalesOpportunity,
+          salesOpportunityReason: 'Potencjał na modernizację.',
+          pricingLanding: c.latestPricingLanding,
+          pricingCompanySite: c.latestPricingCompanySite,
+          pricingEcommerce: c.latestPricingEcommerce,
+          hasSsl: audit.websiteScore > 50,
+          isMobileFriendly: audit.websiteScore > 60,
+          hasContactForm: true,
+          hasMetaTitle: true,
+          hasH1: true,
+        },
+      })
+    }
   }
 
   console.log('Seed completed:', { org: org.name, user: user.email, campaign: campaign.name })

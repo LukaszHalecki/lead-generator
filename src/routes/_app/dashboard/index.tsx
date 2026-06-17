@@ -23,6 +23,10 @@ function DashboardPage() {
         <InstantlyStats engagement={stats.emailEngagement} />
         <DashboardCharts
           scoreChartData={stats.scoreChartData}
+          websiteScoreChartData={stats.websiteScoreChartData}
+          emailScoreChartData={stats.emailScoreChartData}
+          marketingScoreChartData={stats.marketingScoreChartData}
+          opportunityChartData={stats.opportunityChartData}
           statusChartData={stats.statusChartData}
           analysisTrendData={stats.analysisTrendData}
         />

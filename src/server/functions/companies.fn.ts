@@ -22,9 +22,19 @@ const listSchema = z.object({
   status: z.string().optional(),
   scoreMin: z.number().optional(),
   scoreMax: z.number().optional(),
+  websiteScoreMin: z.number().optional(),
+  websiteScoreMax: z.number().optional(),
+  emailScoreMin: z.number().optional(),
+  emailScoreMax: z.number().optional(),
+  marketingScoreMin: z.number().optional(),
+  marketingScoreMax: z.number().optional(),
   salesOpportunity: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   leadPriority: z.enum(['HOT', 'WARM', 'COLD']).optional(),
-  sortBy: z.enum(['name', 'score', 'createdAt', 'status']).optional(),
+  missingSpf: z.boolean().optional(),
+  missingDkim: z.boolean().optional(),
+  missingDmarc: z.boolean().optional(),
+  usesFreeEmail: z.boolean().optional(),
+  sortBy: z.enum(['name', 'score', 'websiteScore', 'emailScore', 'marketingScore', 'createdAt', 'status']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
   search: z.string().optional(),
 })
@@ -47,6 +57,34 @@ export const listCompaniesFn = createServerFn({ method: 'GET' })
             },
           }
         : {}),
+      ...(data.websiteScoreMin !== undefined || data.websiteScoreMax !== undefined
+        ? {
+            latestWebsiteScore: {
+              ...(data.websiteScoreMin !== undefined ? { gte: data.websiteScoreMin } : {}),
+              ...(data.websiteScoreMax !== undefined ? { lte: data.websiteScoreMax } : {}),
+            },
+          }
+        : {}),
+      ...(data.emailScoreMin !== undefined || data.emailScoreMax !== undefined
+        ? {
+            latestEmailScore: {
+              ...(data.emailScoreMin !== undefined ? { gte: data.emailScoreMin } : {}),
+              ...(data.emailScoreMax !== undefined ? { lte: data.emailScoreMax } : {}),
+            },
+          }
+        : {}),
+      ...(data.marketingScoreMin !== undefined || data.marketingScoreMax !== undefined
+        ? {
+            latestMarketingScore: {
+              ...(data.marketingScoreMin !== undefined ? { gte: data.marketingScoreMin } : {}),
+              ...(data.marketingScoreMax !== undefined ? { lte: data.marketingScoreMax } : {}),
+            },
+          }
+        : {}),
+      ...(data.missingSpf ? { hasSpf: false } : {}),
+      ...(data.missingDkim ? { hasDkim: false } : {}),
+      ...(data.missingDmarc ? { hasDmarc: false } : {}),
+      ...(data.usesFreeEmail ? { usesFreeEmail: true } : {}),
       ...(data.search
         ? {
             OR: [
@@ -62,17 +100,31 @@ export const listCompaniesFn = createServerFn({ method: 'GET' })
     const orderBy =
       data.sortBy === 'score'
         ? { latestScore: data.sortDir ?? 'asc' }
-        : data.sortBy === 'status'
-          ? { status: data.sortDir ?? 'asc' }
-          : data.sortBy === 'createdAt'
-            ? { createdAt: data.sortDir ?? 'desc' }
-            : { name: data.sortDir ?? 'asc' }
+        : data.sortBy === 'websiteScore'
+          ? { latestWebsiteScore: data.sortDir ?? 'asc' }
+          : data.sortBy === 'emailScore'
+            ? { latestEmailScore: data.sortDir ?? 'asc' }
+            : data.sortBy === 'marketingScore'
+              ? { latestMarketingScore: data.sortDir ?? 'asc' }
+              : data.sortBy === 'status'
+                ? { status: data.sortDir ?? 'asc' }
+                : data.sortBy === 'createdAt'
+                  ? { createdAt: data.sortDir ?? 'desc' }
+                  : { name: data.sortDir ?? 'asc' }
 
     return db.company.findMany({
       where,
       orderBy,
       include: {
         analyses: { orderBy: { analyzedAt: 'desc' }, take: 1 },
+        audits: {
+          orderBy: { auditedAt: 'desc' },
+          take: 1,
+          include: {
+            emailAudit: { include: { emailRecords: true, dnsRecords: true } },
+            marketingAudit: true,
+          },
+        },
       },
     })
   })
@@ -86,6 +138,13 @@ export const getCompanyFn = createServerFn({ method: 'GET' })
       where: { id: companyId, organizationId },
       include: {
         analyses: { orderBy: { analyzedAt: 'desc' } },
+        audits: {
+          orderBy: { auditedAt: 'desc' },
+          include: {
+            emailAudit: { include: { emailRecords: true, dnsRecords: true } },
+            marketingAudit: true,
+          },
+        },
         messages: { orderBy: { createdAt: 'desc' } },
         replies: { orderBy: { receivedAt: 'desc' } },
         notes: {

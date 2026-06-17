@@ -127,6 +127,15 @@ model Company {
   emailClickedCount   Int @default(0)
   emailRepliedCount   Int @default(0)
 
+  // Denormalizacja audytu
+  latestWebsiteScore    Int?
+  latestEmailScore      Int?
+  latestMarketingScore  Int?
+  hasSpf                Boolean?
+  hasDkim               Boolean?
+  hasDmarc              Boolean?
+  usesFreeEmail         Boolean?
+
   source     CompanySource @default(MANUAL)
   externalId String?
 
@@ -135,6 +144,7 @@ model Company {
 
   organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   analyses      CompanyAnalysis[]
+  audits        CompanyAudit[]
   campaignLeads CampaignLead[]
   messages      Message[]
   replies       Reply[]
@@ -147,7 +157,14 @@ model Company {
   @@index([organizationId, latestScore])
   @@index([organizationId, latestSalesOpportunity])
   @@index([organizationId, latestLeadPriority])
+  @@index([organizationId, latestWebsiteScore])
+  @@index([organizationId, latestEmailScore])
+  @@index([organizationId, latestMarketingScore])
   @@index([organizationId, industry])
+  @@index([organizationId, hasSpf])
+  @@index([organizationId, hasDkim])
+  @@index([organizationId, hasDmarc])
+  @@index([organizationId, usesFreeEmail])
   @@map("companies")
 }
 
@@ -258,6 +275,184 @@ model CompanyAnalysis {
 
   @@index([companyId, analyzedAt])
   @@map("company_analyses")
+}
+
+// ─────────────────────────────────────────────
+// Website & Email Audit
+// ─────────────────────────────────────────────
+
+model CompanyAudit {
+  id        String @id @default(cuid())
+  companyId String
+
+  websiteScore   Int
+  emailScore     Int
+  marketingScore Int
+  leadScore      Int
+  category       AnalysisCategory
+  overallOpportunity SalesOpportunity
+  opportunityReason  String? @db.Text
+
+  // Website — technical
+  hasSsl             Boolean?
+  sslValidUntil      DateTime?
+  hasHttpsRedirect   Boolean?
+  isMobileFriendly   Boolean?
+  isResponsive       Boolean?
+  loadTimeMs         Int?
+  hasMetaTitle       Boolean?
+  hasMetaDescription Boolean?
+  hasH1              Boolean?
+  metaTitle          String?
+  metaDescription    String?
+  h1Text             String?
+  h1Count            Int?
+  hasFavicon         Boolean?
+  hasRobotsTxt       Boolean?
+  hasSitemap         Boolean?
+  hasContactForm     Boolean?
+  hasGoogleMaps      Boolean?
+  hasPrivacyPolicy   Boolean?
+  hasCookieBanner    Boolean?
+
+  // Website — SEO
+  titleLength        Int?
+  descriptionLength  Int?
+  hasMultipleH1      Boolean?
+  hasMissingHeadings Boolean?
+  internalLinksCount Int?
+  hasStructuredData  Boolean?
+
+  // Website — UX (AI)
+  aiDesignScore      Int?
+  aiTrustScore       Int?
+  aiReadabilityScore Int?
+  aiCtaScore         Int?
+  uxFindings         Json?
+
+  // AI Business Assessment
+  problems        Json
+  businessImpact  Json
+  recommendations Json
+  expertSummary   String? @db.Text
+
+  // Wycena (PLN)
+  pricingLanding     Int?
+  pricingCompanySite Int?
+  pricingEcommerce   Int?
+
+  // Screenshots
+  screenshotDesktopPath String?
+  screenshotMobilePath  String?
+
+  scoreBreakdown  Json?
+  websiteFindings Json?
+  rawWebsiteData  Json?
+  rawAiResponse   Json?
+
+  auditedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  emailAudit     EmailAudit?
+  marketingAudit MarketingAudit?
+
+  @@index([companyId, auditedAt])
+  @@map("company_audits")
+}
+
+model EmailAudit {
+  id             String @id @default(cuid())
+  companyAuditId String @unique
+
+  emailScore         Int
+  hasMx              Boolean @default(false)
+  hasSpf             Boolean @default(false)
+  hasDkim            Boolean @default(false)
+  hasDmarc           Boolean @default(false)
+  usesBusinessDomain Boolean @default(false)
+  usesFreeEmailOnly  Boolean @default(false)
+  findings           Json?
+
+  companyAudit CompanyAudit  @relation(fields: [companyAuditId], references: [id], onDelete: Cascade)
+  emailRecords EmailRecord[]
+  dnsRecords   DnsRecord[]
+
+  @@map("email_audits")
+}
+
+model EmailRecord {
+  id           String @id @default(cuid())
+  emailAuditId String
+
+  address        String
+  source         String
+  classification EmailProviderType
+
+  emailAudit EmailAudit @relation(fields: [emailAuditId], references: [id], onDelete: Cascade)
+
+  @@index([emailAuditId])
+  @@index([address])
+  @@map("email_records")
+}
+
+enum EmailProviderType {
+  PROFESSIONAL
+  GMAIL
+  OUTLOOK
+  YAHOO
+  WP_PL
+  ONET
+  INTERIA
+  O2
+  OTHER_FREE
+  UNKNOWN
+}
+
+model DnsRecord {
+  id           String @id @default(cuid())
+  emailAuditId String
+
+  domain     String
+  recordType DnsRecordType
+  value      String? @db.Text
+  isValid    Boolean @default(false)
+
+  emailAudit EmailAudit @relation(fields: [emailAuditId], references: [id], onDelete: Cascade)
+
+  @@index([emailAuditId, domain])
+  @@map("dns_records")
+}
+
+enum DnsRecordType {
+  MX
+  SPF
+  DKIM
+  DMARC
+}
+
+model MarketingAudit {
+  id             String @id @default(cuid())
+  companyAuditId String @unique
+
+  marketingScore Int
+
+  hasGoogleAnalytics  Boolean @default(false)
+  hasGa4              Boolean @default(false)
+  hasGoogleTagManager Boolean @default(false)
+  hasMetaPixel        Boolean @default(false)
+  hasLinkedInInsight  Boolean @default(false)
+
+  socialLinks   Json?
+  hasGoogleMaps Boolean @default(false)
+  hasAddress    Boolean @default(false)
+  hasPhone      Boolean @default(false)
+
+  findings Json?
+
+  companyAudit CompanyAudit @relation(fields: [companyAuditId], references: [id], onDelete: Cascade)
+
+  @@map("marketing_audits")
 }
 
 // ─────────────────────────────────────────────
@@ -474,6 +669,7 @@ enum ActivityType {
   COMPANY_UPDATED
   COMPANY_DELETED
   ANALYSIS_COMPLETED
+  AUDIT_COMPLETED
   REPORT_GENERATED
   PRICING_GENERATED
   MESSAGE_SENT

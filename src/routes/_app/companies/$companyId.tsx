@@ -17,6 +17,7 @@ import {
   CompanyFormDialog,
   companyToFormValues,
 } from '@/components/companies/company-form-dialog'
+import { AuditReport } from '@/components/audit/audit-report'
 import { AnalysisReport } from '@/components/analysis/analysis-report'
 import { ActivityTimeline } from '@/components/crm/activity-timeline'
 import { WorkflowPanel } from '@/components/workflow/workflow-panel'
@@ -45,6 +46,7 @@ function CompanyDetailPage() {
   const [note, setNote] = useState('')
   const [editOpen, setEditOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const latestAudit = company.audits[0]
   const latestAnalysis = company.analyses[0]
 
   async function refresh() {
@@ -108,8 +110,10 @@ function CompanyDetailPage() {
         <CompanyStatusBadge status={company.status} />
         <SalesOpportunityBadge opportunity={company.latestSalesOpportunity} />
         <LeadPriorityBadge priority={company.latestLeadPriority} />
-        {company.latestScore !== null && (
-          <span className="text-sm font-medium">Lead Score: {company.latestScore}/100</span>
+        {company.latestWebsiteScore !== null && (
+          <span className="text-sm font-medium">
+            Website: {company.latestWebsiteScore} | Email: {company.latestEmailScore ?? '—'} | Marketing: {company.latestMarketingScore ?? '—'}
+          </span>
         )}
       </div>
 
@@ -126,9 +130,13 @@ function CompanyDetailPage() {
           companyId={company.id}
           hasWebsite={!!company.website}
           hasEmail={!!company.email}
+          hasAudit={company.audits.length > 0}
           hasAnalysis={company.analyses.length > 0}
           hasMessage={company.messages.length > 0}
           latestScore={company.latestScore}
+          latestWebsiteScore={company.latestWebsiteScore}
+          latestEmailScore={company.latestEmailScore}
+          latestMarketingScore={company.latestMarketingScore}
           campaigns={campaigns}
           onComplete={refresh}
         />
@@ -136,12 +144,14 @@ function CompanyDetailPage() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="space-y-6">
-          {latestAnalysis ? (
+          {latestAudit ? (
+            <AuditReport audit={latestAudit} />
+          ) : latestAnalysis ? (
             <AnalysisReport analysis={latestAnalysis} />
           ) : (
             <Card>
               <CardContent className="p-6 text-sm text-slate-500">
-                Brak analizy — uruchom workflow poniżej lub użyj przycisku „Analiza”.
+                Brak audytu — uruchom workflow poniżej lub użyj przycisku „Website Audit”.
               </CardContent>
             </Card>
           )}

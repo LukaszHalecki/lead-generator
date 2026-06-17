@@ -47,20 +47,28 @@ function CompaniesPage() {
   const [scoreMin, setScoreMin] = useState<number | undefined>()
   const [scoreMax, setScoreMax] = useState<number | undefined>()
   const [leadPriority, setLeadPriority] = useState<LeadPriority | undefined>()
-  const [sortBy, setSortBy] = useState<'name' | 'score' | 'createdAt' | 'status'>('createdAt')
+  const [sortBy, setSortBy] = useState<'name' | 'score' | 'websiteScore' | 'emailScore' | 'marketingScore' | 'createdAt' | 'status'>('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [search, setSearch] = useState('')
+  const [auditFilter, setAuditFilter] = useState<'none' | 'missingSpf' | 'missingDkim' | 'missingDmarc' | 'freeEmail' | 'highOpportunity'>('none')
 
   async function reload(opts?: {
     min?: number
     max?: number
     priority?: LeadPriority | undefined
+    audit?: typeof auditFilter
   }) {
+    const filter = opts?.audit !== undefined ? opts.audit : auditFilter
     const result = await listCompaniesFn({
       data: {
         scoreMin: opts?.min ?? scoreMin,
         scoreMax: opts?.max ?? scoreMax,
         leadPriority: opts?.priority !== undefined ? opts.priority : leadPriority,
+        salesOpportunity: filter === 'highOpportunity' ? 'HIGH' : undefined,
+        missingSpf: filter === 'missingSpf' ? true : undefined,
+        missingDkim: filter === 'missingDkim' ? true : undefined,
+        missingDmarc: filter === 'missingDmarc' ? true : undefined,
+        usesFreeEmail: filter === 'freeEmail' ? true : undefined,
         sortBy,
         sortDir,
         search: search || undefined,
@@ -201,13 +209,28 @@ function CompaniesPage() {
 
       <div className="mb-6 flex flex-wrap gap-3">
         {SCORE_FILTER_PRESETS.map((preset) => (
-          <Button
-            key={preset.label}
-            variant="outline"
-            size="sm"
-            onClick={() => applyScorePreset(preset)}
-          >
+          <Button key={preset.label} variant="outline" size="sm" onClick={() => applyScorePreset(preset)}>
             {preset.label}
+          </Button>
+        ))}
+        {[
+          { key: 'missingSpf' as const, label: 'Brak SPF' },
+          { key: 'missingDkim' as const, label: 'Brak DKIM' },
+          { key: 'missingDmarc' as const, label: 'Brak DMARC' },
+          { key: 'freeEmail' as const, label: 'Free email' },
+          { key: 'highOpportunity' as const, label: 'HIGH Opportunity' },
+        ].map((f) => (
+          <Button
+            key={f.key}
+            variant={auditFilter === f.key ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              const next = auditFilter === f.key ? 'none' : f.key
+              setAuditFilter(next)
+              reload({ audit: next })
+            }}
+          >
+            {f.label}
           </Button>
         ))}
         <Button
@@ -217,7 +240,8 @@ function CompaniesPage() {
             setScoreMin(undefined)
             setScoreMax(undefined)
             setLeadPriority(undefined)
-            reload({ min: undefined, max: undefined, priority: undefined })
+            setAuditFilter('none')
+            reload({ min: undefined, max: undefined, priority: undefined, audit: 'none' })
           }}
         >
           Reset
@@ -241,6 +265,9 @@ function CompaniesPage() {
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
           >
             <option value="score">Lead Score</option>
+            <option value="websiteScore">Website Score</option>
+            <option value="emailScore">Email Score</option>
+            <option value="marketingScore">Marketing Score</option>
             <option value="name">Nazwa</option>
             <option value="status">Status</option>
             <option value="createdAt">Data dodania</option>
@@ -276,7 +303,7 @@ function CompaniesPage() {
               Usuń zaznaczone
             </Button>
             <Button variant="outline" size="sm" disabled={bulkLoading} onClick={handleBulkAnalyze}>
-              Uruchom analizę
+              Uruchom audyt
             </Button>
             {campaigns.length > 0 && (
               <>
@@ -316,8 +343,11 @@ function CompaniesPage() {
               <th className="p-4">Firma</th>
               <th className="p-4">WWW / Email</th>
               <th className="p-4">Miasto</th>
+              <th className="p-4">Website</th>
+              <th className="p-4">Email</th>
+              <th className="p-4">Marketing</th>
               <th className="p-4">Lead Score</th>
-              <th className="p-4">Priorytet</th>
+              <th className="p-4">Opportunity</th>
               <th className="p-4">Status</th>
               <th className="p-4"></th>
             </tr>
@@ -325,7 +355,7 @@ function CompaniesPage() {
           <tbody>
             {companies.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-slate-500">
+                <td colSpan={10} className="p-8 text-center text-slate-500">
                   Brak firm — kliknij „Nowa firma”, aby dodać pierwszą.
                 </td>
               </tr>
@@ -345,12 +375,15 @@ function CompaniesPage() {
                   <div className="text-xs">{company.email ?? ''}</div>
                 </td>
                 <td className="p-4 text-slate-500">{company.city ?? '—'}</td>
+                <td className="p-4 text-center text-xs">{company.latestWebsiteScore ?? '—'}</td>
+                <td className="p-4 text-center text-xs">{company.latestEmailScore ?? '—'}</td>
+                <td className="p-4 text-center text-xs">{company.latestMarketingScore ?? '—'}</td>
                 <td className="p-4 w-36">
                   <LeadScoreIndicator score={company.latestScore} showLabel={false} />
                   <span className="text-xs text-slate-500">{company.latestScore ?? '—'}/100</span>
                 </td>
                 <td className="p-4">
-                  <LeadPriorityBadge priority={company.latestLeadPriority} />
+                  <SalesOpportunityBadge opportunity={company.latestSalesOpportunity} />
                 </td>
                 <td className="p-4">
                   <CompanyStatusBadge status={company.status} />
