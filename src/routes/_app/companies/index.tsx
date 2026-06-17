@@ -21,6 +21,7 @@ import { LEAD_PRIORITY_DESCRIPTIONS, LEAD_PRIORITY_FILTERS, SCORE_FILTER_PRESETS
 import type { LeadPriority } from '@/lib/lead-priority'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { CompanyFormValues } from '@/lib/validators/company.schema'
+import { Loader2, Plus, Trash2 } from 'lucide-react'
 
 export const Route = createFileRoute('/_app/companies/')({
   loader: async () => {
