@@ -121,6 +121,9 @@ async function runEmailOnlyAudit(email: string): Promise<QuickAuditResult> {
     ].filter(Boolean) as string[],
     expertSummary: `Audyt infrastruktury email dla ${email}: wynik ${emailResult.score}/100.`,
     uxFindings: [],
+    scoreBreakdown: {
+      email: emailResult.breakdown,
+    },
   }
 }
 
@@ -159,6 +162,8 @@ async function runWebsiteQuickAudit(website: string, manualEmail: string | null)
   )
 
   const websiteScore = blendWebsiteScoreWithUx(preliminaryWebsiteScore, ai)
+  const uxAvg = Math.round((ai.aiDesignScore + ai.aiTrustScore + ai.aiReadabilityScore + ai.aiCtaScore) / 4)
+
   const checkInput = technicalToCheckInput({
     ...websiteAudit,
     hasSecurityCertificate: websiteAudit.hasSsl,
@@ -197,5 +202,17 @@ async function runWebsiteQuickAudit(website: string, manualEmail: string | null)
     recommendations: ai.recommendations,
     expertSummary: ai.expertSummary,
     uxFindings: ai.uxFindings,
+    scoreBreakdown: {
+      email: emailResult.breakdown,
+      website: websiteAudit.scoreBreakdown,
+      marketing: marketingAudit.scoreBreakdown,
+      ux: [
+        { label: 'Design (AI)', points: ai.aiDesignScore },
+        { label: 'Zaufanie (AI)', points: ai.aiTrustScore },
+        { label: 'Czytelność (AI)', points: ai.aiReadabilityScore },
+        { label: 'CTA (AI)', points: ai.aiCtaScore },
+      ],
+      websiteBlend: `Website Score = 65% audyt techniczny (${preliminaryWebsiteScore} pkt) + 35% UX AI (śr. ${uxAvg} pkt) = ${websiteScore} pkt`,
+    },
   }
 }

@@ -1,4 +1,5 @@
 import type { EmailProviderType, SalesOpportunity } from '@prisma/client'
+import type { QuickAuditScoreBreakdown } from '@/lib/score-breakdown'
 
 export interface QuickAuditEmailRecord {
   address: string
@@ -53,4 +54,5 @@ export interface QuickAuditResult {
   recommendations: string[]
   expertSummary: string | null
   uxFindings: string[]
+  scoreBreakdown: QuickAuditScoreBreakdown
 }

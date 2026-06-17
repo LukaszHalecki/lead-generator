@@ -1,3 +1,4 @@
+import type { ScoreBreakdownLine } from '@/lib/score-breakdown'
 import * as cheerio from 'cheerio'
 import { ensureHttps } from '@/lib/url'
 import tls from 'node:tls'
@@ -46,6 +47,7 @@ export interface WebsiteAuditResult {
 
   websiteScore: number
   findings: string[]
+  scoreBreakdown: ScoreBreakdownLine[]
 }
 
 const OUTDATED_TECH = [/jquery-1\./i, /<marquee/i, /<font\b/i, /table[^>]*layout/i]
@@ -130,53 +132,64 @@ function estimateDomainAge(html: string, bodyText: string): number | null {
   return null
 }
 
-function calculateWebsiteScore(checks: Omit<WebsiteAuditResult, 'websiteScore' | 'findings' | 'rawHtml' | 'finalUrl'>): { score: number; findings: string[] } {
+function calculateWebsiteScore(checks: Omit<WebsiteAuditResult, 'websiteScore' | 'findings' | 'scoreBreakdown' | 'rawHtml' | 'finalUrl'>): {
+  score: number
+  findings: string[]
+  breakdown: ScoreBreakdownLine[]
+} {
   const findings: string[] = []
+  const breakdown: ScoreBreakdownLine[] = []
   let score = 0
 
-  const add = (pts: number, pass: boolean, passMsg: string, failMsg: string) => {
+  const add = (pts: number, pass: boolean, label: string, passMsg: string, failMsg: string) => {
     if (pass) {
       score += pts
+      breakdown.push({ label, points: pts })
       findings.push(`✓ ${passMsg}`)
     } else {
+      breakdown.push({ label: `${label} (brak)`, points: 0 })
       findings.push(`✗ ${failMsg}`)
     }
   }
 
-  add(8, checks.hasSsl, 'SSL certificate present', 'No SSL certificate')
-  add(5, checks.hasHttpsRedirect, 'HTTPS redirect configured', 'No HTTPS redirect from HTTP')
-  add(8, checks.isMobileFriendly, 'Mobile-friendly viewport', 'Not mobile-friendly')
-  add(7, checks.isResponsive, 'Responsive design detected', 'No responsive design')
-  add(6, checks.loadTimeMs !== null && checks.loadTimeMs < 3000, `Page load time acceptable (${checks.loadTimeMs}ms)`, `Slow page load (${checks.loadTimeMs}ms)`)
-  add(5, checks.hasMetaTitle, 'Meta title present', 'Missing meta title')
-  add(5, checks.hasMetaDescription, 'Meta description present', 'Missing meta description')
-  add(5, checks.hasH1 && !checks.hasMultipleH1, 'Single H1 heading', checks.hasMultipleH1 ? 'Multiple H1 tags detected' : 'Missing H1 heading')
-  add(3, checks.hasFavicon, 'Favicon present', 'Missing favicon')
-  add(4, checks.hasRobotsTxt, 'robots.txt found', 'Missing robots.txt')
-  add(4, checks.hasSitemap, 'sitemap.xml found', 'Missing sitemap.xml')
-  add(6, checks.hasContactForm, 'Contact form present', 'No contact form')
-  add(4, checks.hasGoogleMaps, 'Google Maps integration', 'No Google Maps')
-  add(4, checks.hasPrivacyPolicy, 'Privacy policy page', 'Missing privacy policy')
-  add(3, checks.hasCookieBanner, 'Cookie consent banner', 'No cookie banner')
-  add(5, checks.hasStructuredData, 'Structured data (JSON-LD)', 'No structured data')
-  add(4, !checks.hasMissingHeadings, 'Heading hierarchy OK', 'Missing heading structure (H2/H3)')
-  add(3, checks.internalLinksCount >= 5, `Internal linking (${checks.internalLinksCount} links)`, 'Insufficient internal links')
+  add(8, checks.hasSsl, 'SSL', 'SSL certificate present', 'No SSL certificate')
+  add(5, checks.hasHttpsRedirect, 'HTTPS redirect', 'HTTPS redirect configured', 'No HTTPS redirect from HTTP')
+  add(8, checks.isMobileFriendly, 'Mobile friendly', 'Mobile-friendly viewport', 'Not mobile-friendly')
+  add(7, checks.isResponsive, 'Responsywność', 'Responsive design detected', 'No responsive design')
+  add(6, checks.loadTimeMs !== null && checks.loadTimeMs < 3000, 'Szybkość ładowania', `Page load time acceptable (${checks.loadTimeMs}ms)`, `Slow page load (${checks.loadTimeMs}ms)`)
+  add(5, checks.hasMetaTitle, 'Meta title', 'Meta title present', 'Missing meta title')
+  add(5, checks.hasMetaDescription, 'Meta description', 'Meta description present', 'Missing meta description')
+  add(5, checks.hasH1 && !checks.hasMultipleH1, 'H1', 'Single H1 heading', checks.hasMultipleH1 ? 'Multiple H1 tags detected' : 'Missing H1 heading')
+  add(3, checks.hasFavicon, 'Favicon', 'Favicon present', 'Missing favicon')
+  add(4, checks.hasRobotsTxt, 'robots.txt', 'robots.txt found', 'Missing robots.txt')
+  add(4, checks.hasSitemap, 'sitemap.xml', 'sitemap.xml found', 'Missing sitemap.xml')
+  add(6, checks.hasContactForm, 'Formularz kontaktowy', 'Contact form present', 'No contact form')
+  add(4, checks.hasGoogleMaps, 'Google Maps', 'Google Maps integration', 'No Google Maps')
+  add(4, checks.hasPrivacyPolicy, 'Polityka prywatności', 'Privacy policy page', 'Missing privacy policy')
+  add(3, checks.hasCookieBanner, 'Cookie banner', 'Cookie consent banner', 'No cookie banner')
+  add(5, checks.hasStructuredData, 'Structured data', 'Structured data (JSON-LD)', 'No structured data')
+  add(4, !checks.hasMissingHeadings, 'Nagłówki H2/H3', 'Heading hierarchy OK', 'Missing heading structure (H2/H3)')
+  add(3, checks.internalLinksCount >= 5, 'Linki wewnętrzne', `Internal linking (${checks.internalLinksCount} links)`, 'Insufficient internal links')
 
   if (checks.titleLength >= 30 && checks.titleLength <= 60) {
     score += 3
+    breakdown.push({ label: 'Długość title (30–60 znaków)', points: 3 })
     findings.push('✓ Title length optimal (30-60 chars)')
   } else if (checks.hasMetaTitle) {
+    breakdown.push({ label: 'Długość title (poza zakresem)', points: 0 })
     findings.push(`⚠ Title length suboptimal (${checks.titleLength} chars)`)
   }
 
   if (checks.descriptionLength >= 120 && checks.descriptionLength <= 160) {
     score += 3
+    breakdown.push({ label: 'Długość description (120–160 znaków)', points: 3 })
     findings.push('✓ Description length optimal (120-160 chars)')
   } else if (checks.hasMetaDescription) {
+    breakdown.push({ label: 'Długość description (poza zakresem)', points: 0 })
     findings.push(`⚠ Description length suboptimal (${checks.descriptionLength} chars)`)
   }
 
-  return { score: Math.min(100, Math.max(0, score)), findings }
+  return { score: Math.min(100, Math.max(0, score)), findings, breakdown }
 }
 
 export async function runWebsiteAudit(url: string): Promise<WebsiteAuditResult> {
@@ -327,7 +340,7 @@ export async function runWebsiteAudit(url: string): Promise<WebsiteAuditResult> 
     hasSecurityCertificate: hasSsl,
   }
 
-  const { score, findings } = calculateWebsiteScore(baseChecks)
+  const { score, findings, breakdown } = calculateWebsiteScore(baseChecks)
 
   return {
     ...baseChecks,
@@ -335,5 +348,6 @@ export async function runWebsiteAudit(url: string): Promise<WebsiteAuditResult> 
     finalUrl,
     websiteScore: score,
     findings,
+    scoreBreakdown: breakdown,
   }
 }

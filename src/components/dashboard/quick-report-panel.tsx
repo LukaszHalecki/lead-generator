@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useServerFn } from '@tanstack/react-start'
 import { runQuickReportFn } from '@/server/functions/quick-report.fn'
 import type { QuickAuditResult } from '@/lib/quick-audit.types'
+import type { QuickAuditScoreBreakdown, ScoreBreakdownLine } from '@/lib/score-breakdown'
 import { extractErrorMessage } from '@/lib/extract-error'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -156,6 +157,10 @@ function QuickReportResults({ result }: { result: QuickAuditResult }) {
         {result.marketingScore != null && <ScoreBar label="Marketing Score" score={result.marketingScore} />}
       </div>
 
+      {result.scoreBreakdown && (
+        <ScoreBreakdownSection breakdown={result.scoreBreakdown} />
+      )}
+
       {result.opportunityReason && (
         <p className="text-sm text-slate-700">{result.opportunityReason}</p>
       )}
@@ -235,6 +240,47 @@ function QuickReportResults({ result }: { result: QuickAuditResult }) {
           </ul>
         </div>
       )}
+    </div>
+  )
+}
+
+function ScoreBreakdownSection({ breakdown }: { breakdown: QuickAuditScoreBreakdown }) {
+  const sections: { title: string; lines: ScoreBreakdownLine[] }[] = [
+    { title: 'Email Score — składowe', lines: breakdown.email },
+    ...(breakdown.website ? [{ title: 'Website Score — audyt techniczny', lines: breakdown.website }] : []),
+    ...(breakdown.ux ? [{ title: 'Website Score — ocena UX (AI)', lines: breakdown.ux }] : []),
+    ...(breakdown.marketing ? [{ title: 'Marketing Score — składowe', lines: breakdown.marketing }] : []),
+  ]
+
+  return (
+    <div className="space-y-3 border-t border-slate-200 pt-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        Rozpisanie punktacji
+      </p>
+      {breakdown.websiteBlend && (
+        <p className="text-xs text-slate-500">{breakdown.websiteBlend}</p>
+      )}
+      {sections.map((section) => (
+        <div key={section.title}>
+          <p className="mb-1 text-xs font-medium text-slate-600">{section.title}</p>
+          <ul className="space-y-0.5">
+            {section.lines.map((line, i) => (
+              <li key={i} className="flex justify-between gap-4 text-xs text-slate-500">
+                <span>{line.label}</span>
+                <span className={`shrink-0 font-mono ${line.points > 0 ? 'text-emerald-600' : line.points < 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                  {line.points > 0 ? '+' : ''}{line.points} pkt
+                </span>
+              </li>
+            ))}
+            <li className="flex justify-between gap-4 border-t border-slate-200 pt-1 text-xs font-medium text-slate-600">
+              <span>Suma składowych</span>
+              <span className="font-mono">
+                {section.lines.reduce((s, l) => s + l.points, 0)} pkt
+              </span>
+            </li>
+          </ul>
+        </div>
+      ))}
     </div>
   )
 }
