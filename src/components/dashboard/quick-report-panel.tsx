@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { runQuickReportFn } from '@/server/functions/dashboard.fn'
+import { useServerFn } from '@tanstack/react-start'
+import { runQuickReportFn } from '@/server/functions/quick-report.fn'
 import type { QuickAuditResult } from '@/lib/quick-audit.types'
+import { extractErrorMessage } from '@/lib/extract-error'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
@@ -35,6 +37,7 @@ function CheckItem({ ok, label }: { ok: boolean; label: string }) {
 }
 
 export function QuickReportPanel() {
+  const runQuickReport = useServerFn(runQuickReportFn)
   const [website, setWebsite] = useState('')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
@@ -46,16 +49,32 @@ export function QuickReportPanel() {
     setLoading(true)
     setError(null)
     setResult(null)
+
+    const websiteValue = website.trim()
+    const emailValue = email.trim()
+
+    if (!websiteValue && !emailValue) {
+      setError('Podaj adres strony WWW lub email')
+      setLoading(false)
+      return
+    }
+
+    if (emailValue && !emailValue.includes('@')) {
+      setError('Nieprawidłowy adres email')
+      setLoading(false)
+      return
+    }
+
     try {
-      const data = await runQuickReportFn({
+      const data = await runQuickReport({
         data: {
-          website: website.trim() || undefined,
-          email: email.trim() || undefined,
+          website: websiteValue || undefined,
+          email: emailValue || undefined,
         },
       })
       setResult(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Błąd audytu')
+      setError(extractErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -67,11 +86,12 @@ export function QuickReportPanel() {
         <CardTitle>Szybki raport</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <form noValidate onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="sm:col-span-2">
             <Label htmlFor="quick-website">Strona WWW</Label>
             <Input
               id="quick-website"
+              type="text"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
               placeholder="np. firma.pl lub https://firma.pl"
@@ -82,18 +102,25 @@ export function QuickReportPanel() {
             <Label htmlFor="quick-email">Email (opcjonalnie)</Label>
             <Input
               id="quick-email"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="np. kontakt@firma.pl"
               disabled={loading}
             />
           </div>
-          <div className="flex items-end sm:col-span-2 lg:col-span-4">
+          <div className="flex flex-col gap-2 sm:col-span-2 lg:col-span-4 sm:flex-row sm:items-center">
             <Button type="submit" disabled={loading || (!website.trim() && !email.trim())}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               Sprawdź
             </Button>
+            {loading && (
+              <span className="text-sm text-slate-500">
+                Trwa audyt — może potrwać do 30 sekund…
+              </span>
+            )}
           </div>
         </form>
 
@@ -101,7 +128,11 @@ export function QuickReportPanel() {
           Podaj stronę WWW, sam email, lub oba. Audyt jest pasywny — nie wysyłamy testowych wiadomości.
         </p>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         {result && <QuickReportResults result={result} />}
       </CardContent>

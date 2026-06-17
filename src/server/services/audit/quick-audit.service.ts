@@ -8,9 +8,47 @@ import { discoverEmails } from './email-discovery'
 import { calculateEmailScore } from './email-scorer'
 import { runMarketingAudit } from './marketing-auditor'
 import { calculateSalesOpportunity } from './opportunity-engine'
-import { runWebsiteAudit } from './website-audit'
+import { runWebsiteAudit, type WebsiteAuditResult } from './website-audit'
+import type { MarketingAuditResult } from './marketing-auditor'
 
 export type { QuickAuditResult } from '@/lib/quick-audit.types'
+
+function slimWebsiteAudit(website: WebsiteAuditResult): QuickAuditResult['websiteAudit'] {
+  return {
+    hasSsl: website.hasSsl,
+    hasHttpsRedirect: website.hasHttpsRedirect,
+    isMobileFriendly: website.isMobileFriendly,
+    hasContactForm: website.hasContactForm,
+    hasRobotsTxt: website.hasRobotsTxt,
+    hasSitemap: website.hasSitemap,
+  }
+}
+
+function slimMarketingAudit(marketing: MarketingAuditResult): QuickAuditResult['marketingAudit'] {
+  return {
+    hasGoogleAnalytics: marketing.hasGoogleAnalytics,
+    hasGa4: marketing.hasGa4,
+    hasMetaPixel: marketing.hasMetaPixel,
+    hasGoogleMaps: marketing.hasGoogleMaps,
+    socialLinks: marketing.socialLinks,
+  }
+}
+
+export function toClientQuickAuditResult(result: QuickAuditResult): QuickAuditResult {
+  return {
+    ...result,
+    websiteAudit: result.websiteAudit
+      ? 'rawHtml' in result.websiteAudit
+        ? slimWebsiteAudit(result.websiteAudit as WebsiteAuditResult)
+        : result.websiteAudit
+      : null,
+    marketingAudit: result.marketingAudit
+      ? 'findings' in result.marketingAudit && !('hasGa4' in result.marketingAudit)
+        ? result.marketingAudit
+        : slimMarketingAudit(result.marketingAudit as MarketingAuditResult)
+      : null,
+  }
+}
 
 export async function runQuickAudit(input: {
   website?: string
@@ -143,8 +181,8 @@ async function runWebsiteQuickAudit(website: string, manualEmail: string | null)
     category,
     overallOpportunity: opportunity.overallOpportunity,
     opportunityReason: opportunity.opportunityReason,
-    websiteAudit,
-    marketingAudit,
+    websiteAudit: slimWebsiteAudit(websiteAudit),
+    marketingAudit: slimMarketingAudit(marketingAudit),
     emailRecords: discovered,
     dnsRecords: dnsSummaries.flatMap((d) => d.records),
     emailFindings: emailResult.findings,
