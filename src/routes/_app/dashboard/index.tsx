@@ -3,6 +3,7 @@ import { getDashboardStatsFn } from '@/server/functions/dashboard.fn'
 import { PageHeader } from '@/components/layout/app-sidebar'
 import { StatsCards, InstantlyStats } from '@/components/dashboard/stats-cards'
 import { DashboardCharts } from '@/components/dashboard/dashboard-charts'
+import { QuickReportPanel } from '@/components/dashboard/quick-report-panel'
 
 export const Route = createFileRoute('/_app/dashboard/')({
   loader: () => getDashboardStatsFn(),
@@ -19,6 +20,7 @@ function DashboardPage() {
         description="Przegląd leadów, analiz i kampanii mailingowych"
       />
       <div className="space-y-8">
+        <QuickReportPanel />
         <StatsCards stats={stats} />
         <InstantlyStats engagement={stats.emailEngagement} />
         <DashboardCharts
